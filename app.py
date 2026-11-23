@@ -281,12 +281,30 @@ h1,h2,h3 { letter-spacing:-.025em; }
 .cch-hero .meta { display:flex; flex-wrap:wrap; gap:8px; position:relative; z-index:1; }
 .cch-hero .meta span { border:1px solid #6592AC; border-radius:5px; padding:5px 10px; font-size:12px; color:#fff; }
 .cch-hero a { color:#C2F5F7!important; font-size:13px; text-decoration:underline; position:relative; z-index:1; }
-.cch-brand-wrap a { display:block; background:#fff; padding:12px; border-radius:0; }
-.cch-brand-wrap img { width:100%; max-width:none; height:auto; object-fit:contain; border-radius:0; padding:0; filter:none; }
+.cch-brand-wrap a { display:block; background:#fff; padding:8px; border-radius:10px; overflow:hidden; }
+.cch-brand-wrap img { display:block; width:100%; max-width:240px; margin:0 auto; height:auto; object-fit:contain; border-radius:6px; padding:0; filter:none; }
 .cch-brand-wrap .brand-note { font-size:13px; line-height:1.5; }
 [data-testid="stMetric"] { border:1px solid rgba(7,157,181,.35); border-top:3px solid #079DB5; border-left:1px solid rgba(7,157,181,.35); border-radius:9px; padding:16px; box-shadow:0 2px 8px rgba(6,38,74,.06); }
-[data-testid="stTabs"] [role="tablist"] { gap:5px!important; border-radius:9px!important; padding:6px!important; }
-[data-testid="stTabs"] button[role="tab"] { border-radius:5px!important; font-size:.88rem; }
+/* Spacious navigation, including Streamlit versions using BaseWeb wrappers. */
+[data-testid="stTabs"] [role="tablist"],
+[data-testid="stTabs"] [data-baseweb="tab-list"] {
+ display:flex!important; align-items:center!important; gap:10px!important;
+ padding:10px!important; border-radius:12px!important; overflow-x:auto!important;
+}
+[data-testid="stTabs"] [role="tab"],
+[data-testid="stTabs"] [data-baseweb="tab"] {
+ flex:0 0 auto!important; margin:0 4px 0 0!important; padding:12px 17px!important;
+ min-height:48px!important; border-radius:9px!important;
+ border:1px solid #47708E!important; font-size:.92rem!important; white-space:nowrap!important;
+ background:#123C64!important; color:#fff!important;
+}
+[data-testid="stTabs"] [role="tab"][aria-selected="true"] {
+ background:#087F93!important; border-color:#78DCE5!important;
+}
+[data-testid="stTabs"] [role="tab"] p { font-size:.92rem!important; white-space:nowrap!important; margin:0!important; }
+[data-testid="stTabs"] [role="tab"]:hover { background:#176486!important; }
+[data-testid="stTabs"] [role="tab"]:focus-visible { outline:2px solid #79EAF2!important; outline-offset:1px!important; }
+
 [data-testid="stDataFrame"] { border-radius:8px; }
 [data-testid="stPlotlyChart"] { border:1px solid rgba(128,128,128,.18); border-radius:10px; padding:6px; }
 .cch-footer { border-top:2px solid #079DB5; padding:16px 0; color:var(--text-color); font-size:13px; }
@@ -351,10 +369,13 @@ def official_logo():
         pass
     return None
 
-CCH_BRAND_IMAGE = official_logo()
+# Prefer an approved local/official asset; retain the previous working brand artwork as fallback.
+CCH_PREVIOUS_LOGO = 'https://pbs.twimg.com/profile_images/1842254877193596928/7cNH2u0x.jpg'
+CCH_BRAND_IMAGE = official_logo() or CCH_PREVIOUS_LOGO
 if CCH_BRAND_IMAGE:
+    brand_style = "background:transparent;padding:0" if CCH_BRAND_IMAGE == CCH_PREVIOUS_LOGO else "background:#fff;padding:8px"
     st.sidebar.markdown(
-        f'<div class="cch-brand-wrap"><a href="https://cookcountyhealth.org/" target="_blank" rel="noopener noreferrer"><img src="{html.escape(CCH_BRAND_IMAGE, quote=True)}" alt="Cook County Health official logo" /></a>'
+        f'<div class="cch-brand-wrap"><a style="{brand_style}" href="https://cookcountyhealth.org/" target="_blank" rel="noopener noreferrer"><img src="{html.escape(CCH_BRAND_IMAGE, quote=True)}" alt="Cook County Health logo" /></a>'
         '<div class="brand-note">Chicago Community Insights<br>Research project · Dashboard filters</div></div>',
         unsafe_allow_html=True)
 else:
@@ -385,7 +406,7 @@ st.markdown(f"""
 </section>
 """, unsafe_allow_html=True)
 st.caption('Research project · Source documentation and verification limitations are available in Tab 5. Not an official patient portal.')
-t1,t2,t3,t4,t5=st.tabs(['Overview & Map','Socioeconomic & Regression','Healthcare & Hospital Impact','Neighborhood Comparison','Glossary & Resources'])
+t1,t2,t3,t4,t5=st.tabs(['🗺️ Overview & Map','📊 Socioeconomic & Regression','🏥 Healthcare & Hospital Impact','🏘️ Neighborhood Comparison','📚 Glossary & Resources'])
 
 row=current[current.ca_name==area].iloc[0] if area!='All Chicago' else None
 selected=current if row is None else current[current.ca_name==area]
@@ -1319,4 +1340,3 @@ st.caption('Chicago community-area research dashboard · Exploratory information
 
 
 st.markdown('<div class="cch-footer"><strong>Chicago Community Insights</strong> · Research project<br>Explore sources and limitations in Glossary &amp; Resources. <a href="https://cookcountyhealth.org/" target="_blank" rel="noopener noreferrer">Visit Cook County Health</a>.</div>', unsafe_allow_html=True)
-
