@@ -264,6 +264,35 @@ h1,h2,h3 { letter-spacing:-.025em; }
 @media(max-width:900px) {
  [data-testid="stTabs"] [role="tab"] { font-size:.82rem!important; padding:9px 11px!important; }
 }
+
+/* Cook County Health-inspired research portal: presentation-only overrides. */
+.stApp { background: var(--background-color, #F6F9FB); }
+[data-testid="stHeader"] { background:var(--background-color, #FFFFFF); }
+.block-container { max-width:1560px; padding-top:1.7rem; padding-bottom:3rem; }
+[data-testid="stMainBlockContainer"] h1, [data-testid="stMainBlockContainer"] h2,
+[data-testid="stMainBlockContainer"] h3 { color:var(--text-color)!important; letter-spacing:-.025em; }
+.cch-hero { position:relative; overflow:hidden; padding:30px 34px; border-radius:12px;
+ background:linear-gradient(110deg,#06264A 0%,#123C64 75%,#087F93 100%); color:#fff; margin-bottom:8px; }
+.cch-hero:after { content:""; position:absolute; right:-55px; top:-95px; width:270px; height:270px;
+ border:32px solid rgba(32,181,198,.27); border-radius:50%; pointer-events:none; }
+.cch-hero .eyebrow { font-size:12px; letter-spacing:.12em; text-transform:uppercase; font-weight:700; color:#B6F0F3; }
+.cch-hero h1 { color:#fff!important; font-size:clamp(1.65rem,3vw,2.65rem); line-height:1.15; margin:12px 0!important; }
+.cch-hero p { color:#E6F4FA; max-width:760px; margin:0 0 16px; font-size:1rem; }
+.cch-hero .meta { display:flex; flex-wrap:wrap; gap:8px; position:relative; z-index:1; }
+.cch-hero .meta span { border:1px solid #6592AC; border-radius:5px; padding:5px 10px; font-size:12px; color:#fff; }
+.cch-hero a { color:#C2F5F7!important; font-size:13px; text-decoration:underline; position:relative; z-index:1; }
+.cch-brand-wrap a { display:block; background:#fff; padding:12px; border-radius:0; }
+.cch-brand-wrap img { width:100%; max-width:none; height:auto; object-fit:contain; border-radius:0; padding:0; filter:none; }
+.cch-brand-wrap .brand-note { font-size:13px; line-height:1.5; }
+[data-testid="stMetric"] { border:1px solid rgba(7,157,181,.35); border-top:3px solid #079DB5; border-left:1px solid rgba(7,157,181,.35); border-radius:9px; padding:16px; box-shadow:0 2px 8px rgba(6,38,74,.06); }
+[data-testid="stTabs"] [role="tablist"] { gap:5px!important; border-radius:9px!important; padding:6px!important; }
+[data-testid="stTabs"] button[role="tab"] { border-radius:5px!important; font-size:.88rem; }
+[data-testid="stDataFrame"] { border-radius:8px; }
+[data-testid="stPlotlyChart"] { border:1px solid rgba(128,128,128,.18); border-radius:10px; padding:6px; }
+.cch-footer { border-top:2px solid #079DB5; padding:16px 0; color:var(--text-color); font-size:13px; }
+.cch-footer a { color:inherit; text-decoration:underline; }
+@media(max-width:700px) { .cch-hero { padding:22px 18px; } .cch-hero:after { opacity:.4; } }
+
 </style>""",unsafe_allow_html=True)
 
 def chart_style(fig, height=None):
@@ -283,14 +312,54 @@ def get(row,col): return row.get(col,np.nan)
 def pct(x): return f'{fmt(x,1)}%' if pd.notna(x) else 'N/A'
 def metric(row,col): return fmt(get(row,col),1 if col in ['shot_rate_per_10k','profile_trauma_drive_min'] else 0)
 
-# Official CCH profile artwork: circular Cook County seal + organization wordmark.
-# The URL is an external logo asset; replace with a local approved image for offline use.
-CCH_BRAND_IMAGE = 'https://pbs.twimg.com/profile_images/1842254877193596928/7cNH2u0x.jpg'
-st.sidebar.markdown(
-    f'<div class="cch-brand-wrap"><img src="{CCH_BRAND_IMAGE}" alt="Cook County Health branding" />'
-    '<div class="brand-note">Chicago Community Health Insights</div></div>',
-    unsafe_allow_html=True,
-)
+# Preserve the actual website logo asset without redrawing or recoloring it.
+# An approved original image can also be placed in data/cch_official_logo.png
+# (or .svg, .webp, .jpg) for a deterministic offline deployment.
+@st.cache_data(ttl=86400, show_spinner=False)
+def official_logo():
+    import base64
+    from html.parser import HTMLParser
+    from urllib.request import Request, urlopen
+    from urllib.parse import urljoin, urlparse
+    for suffix, mime in [('png','image/png'), ('svg','image/svg+xml'), ('webp','image/webp'), ('jpg','image/jpeg')]:
+        path = ROOT / ('cch_official_logo.' + suffix)
+        if path.is_file():
+            return 'data:' + mime + ';base64,' + base64.b64encode(path.read_bytes()).decode('ascii')
+    page = 'https://cookcountyhealth.org/locations/john-h-stroger-jr-hospital-of-cook-county/'
+    class LogoParser(HTMLParser):
+        def __init__(self):
+            super().__init__(); self.candidates = []; self.header_depth = 0
+        def handle_starttag(self, tag, attrs):
+            a = dict(attrs)
+            if tag == 'header': self.header_depth += 1
+            if tag != 'img': return
+            src = a.get('data-src') or a.get('src') or ''
+            desc = ' '.join([src, a.get('alt') or '', a.get('class') or '', a.get('id') or '']).lower()
+            if not src or 'logo' not in desc or any(x in desc for x in ('countycare','expresscare','express-care','seal.png','footer','partner')): return
+            url = urljoin(page, src)
+            if urlparse(url).hostname not in ('cookcountyhealth.org','www.cookcountyhealth.org'): return
+            score = 10*self.header_depth + 5*('custom-logo' in desc) + 4*('cook county health' in desc) + 2*('cch' in desc)
+            if score: self.candidates.append((score,url))
+        def handle_endtag(self, tag):
+            if tag == 'header': self.header_depth = max(0,self.header_depth-1)
+    try:
+        with urlopen(Request(page,headers={'User-Agent':'Mozilla/5.0'}),timeout=8) as response:
+            parser = LogoParser(); parser.feed(response.read().decode('utf-8',errors='replace'))
+        if parser.candidates:
+            return sorted(parser.candidates,key=lambda x:x[0],reverse=True)[0][1]
+    except Exception:
+        pass
+    return None
+
+CCH_BRAND_IMAGE = official_logo()
+if CCH_BRAND_IMAGE:
+    st.sidebar.markdown(
+        f'<div class="cch-brand-wrap"><a href="https://cookcountyhealth.org/" target="_blank" rel="noopener noreferrer"><img src="{html.escape(CCH_BRAND_IMAGE, quote=True)}" alt="Cook County Health official logo" /></a>'
+        '<div class="brand-note">Chicago Community Insights<br>Research project · Dashboard filters</div></div>',
+        unsafe_allow_html=True)
+else:
+    st.sidebar.markdown('**[Cook County Health](https://cookcountyhealth.org/)**')
+    st.sidebar.caption('Chicago Community Insights · Research project')
 year=st.sidebar.selectbox('Reporting year',sorted(D.year.unique(),reverse=True))
 years_available=sorted(D.year.unique().tolist())
 range_start,range_end=st.sidebar.select_slider(
@@ -306,10 +375,17 @@ if 'selected_area' not in st.session_state: st.session_state.selected_area='All 
 if st.session_state.selected_area not in ['All Chicago']+areas: st.session_state.selected_area='All Chicago'
 area=st.sidebar.selectbox('Focus community area',['All Chicago']+areas,key='selected_area')
 st.sidebar.caption(f'{D.ca_num.nunique()} Chicago community areas · {D.year.min()}–{D.year.max()} shooting data')
-st.title('Chicago Gun Violence & Healthcare Dashboard')
-st.caption('Research dashboard · Data sources, reference periods and verification status are detailed in Tab 5.')
-st.caption('Explore how shooting patterns, neighborhood conditions, and access to healthcare differ across Chicago. Select a year and community area in the sidebar.')
-t1,t2,t3,t4,t5=st.tabs(['🗺️ Overview & Map','📊 Socioeconomic Factors & Regression','🏥 Healthcare & Hospital Impact','🏘️ Neighborhood Comparison','📚 Glossary & Resources'])
+st.markdown(f"""
+<section class="cch-hero">
+  <div class="eyebrow">Community health research | Chicago, Illinois</div>
+  <h1>Chicago Gun Violence &amp; Healthcare Insights</h1>
+  <p>Explore neighborhood conditions, shooting victim trends and access to healthcare across Chicago.</p>
+  <div class="meta"><span>{html.escape(str(area))}</span><span>Reporting year: {year}</span><span>{D.ca_num.nunique()} community areas</span><span>Research dashboard</span></div>
+  <p style="margin-top:15px;margin-bottom:0"><a href="https://cookcountyhealth.org/locations/john-h-stroger-jr-hospital-of-cook-county/" target="_blank" rel="noopener noreferrer">Cook County Health — Stroger Hospital</a></p>
+</section>
+""", unsafe_allow_html=True)
+st.caption('Research project · Source documentation and verification limitations are available in Tab 5. Not an official patient portal.')
+t1,t2,t3,t4,t5=st.tabs(['Overview & Map','Socioeconomic & Regression','Healthcare & Hospital Impact','Neighborhood Comparison','Glossary & Resources'])
 
 row=current[current.ca_name==area].iloc[0] if area!='All Chicago' else None
 selected=current if row is None else current[current.ca_name==area]
@@ -1240,3 +1316,7 @@ with st.sidebar.expander('Download dashboard report (PDF)',expanded=False):
         st.caption('Click Generate PDF report first. Reports are rebuilt when you change the selection.')
 
 st.caption('Chicago community-area research dashboard · Exploratory information, not emergency-response or clinical guidance')
+
+
+st.markdown('<div class="cch-footer"><strong>Chicago Community Insights</strong> · Research project<br>Explore sources and limitations in Glossary &amp; Resources. <a href="https://cookcountyhealth.org/" target="_blank" rel="noopener noreferrer">Visit Cook County Health</a>.</div>', unsafe_allow_html=True)
+
