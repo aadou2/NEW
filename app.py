@@ -1174,18 +1174,68 @@ with t5:
     for source_id, purpose in purposes.items():
         agency,title,url=SOURCE_REGISTRY[source_id]
         st.markdown(f'**{agency} — [{title}]({url})**  \n{purpose}')
-    st.markdown('### Field-level source audit')
+    st.markdown('### Data Sources, Definitions & Documentation')
+    st.caption('Use this guide to understand each indicator, its meaning and the status of its supporting documentation. Definitions describe intended measures, not verified source metadata.')
+    st.markdown('[Census poverty definition](https://www.census.gov/topics/income-poverty/guidance/poverty-measures.html) · [Census housing cost reference](https://www.census.gov/library/stories/2022/12/housing-costs-burden.html)')
+    indicator_guide = {'eviction_filing_rate': ('Eviction Filing Rate',
+                              'Eviction court filings relative to renter households; the rate unit is not yet '
+                              'confirmed.'),
+     'fatal': ('Fatal Shooting Victims', 'Recorded shooting victims who died from their injuries.'),
+     'hospital_coverage': ('Illustrative Hospital Coverage Areas',
+                           'Modeled areas reachable within a selected driving time; not actual patient catchment '
+                           'areas.'),
+     'hospital_financials': ('Hospital Financial Information',
+                             'Hospital-wide costs, patient revenue and care costs; not specific to firearm '
+                             'injuries.'),
+     'hospital_locations': ('Hospital Locations',
+                            'Geographic locations of listed hospitals; coordinates and designations require '
+                            'verification.'),
+     'nonfatal': ('Nonfatal Shooting Victims', 'Recorded shooting victims who survived their injuries.'),
+     'pct_on_medicaid': ('Medicaid Coverage (Percentage)',
+                         'Reported share covered by Medicaid; confirm the population denominator.'),
+     'pct_poverty': ('Poverty (Percentage)',
+                     'Share of people with income below the applicable poverty threshold; confirm the source '
+                     'definition.'),
+     'pct_rent_burdened': ('Rent Burden (Percentage)',
+                           'Share of renter households spending a substantial portion of income on housing, '
+                           'commonly 30% or more; confirm the threshold.'),
+     'pct_unemployed': ('Unemployment (Percentage)',
+                        'Share of the labor force without work and seeking employment; confirm the source '
+                        'denominator.'),
+     'per_capita_income': ('Income per Person ($)',
+                           'Average income per resident; confirm the reference period and dollar basis.'),
+     'population': ('Community Population', 'Estimated number of residents in a community area.'),
+     'profile_clinics': ('Community Clinics',
+                         'Reported number of clinics associated with a community; inclusion criteria require '
+                         'confirmation.'),
+     'profile_nearest_center': ('Nearest Listed Trauma Center',
+                                'Hospital identified as nearest in the existing community profile; method '
+                                'unconfirmed.'),
+     'profile_trauma_drive_min': ('Estimated Travel Time to Trauma Center (Minutes)',
+                                  'Estimated driving minutes, not measured ambulance response or transport '
+                                  'time.'),
+     'shot_rate_per_10k': ('Shooting Victim Rate (per 10,000 Residents)',
+                           'Total shooting victims divided by population, multiplied by 10,000.'),
+     'shot_total': ('Total Shooting Victims',
+                    'Recorded fatal and nonfatal shooting victims combined; not a count of distinct incidents.')}
     st.warning('No original data exports were supplied with the code. The references below identify appropriate providers, not proof that existing data came from them. No new numerical dataset has been imported.')
     audit=[]
     for field, ids in FIELD_SOURCES.items():
         entry=PROVENANCE.get(field,{}) if isinstance(PROVENANCE.get(field,{}),dict) else {}
-        audit.append({'Field':field,'Reference providers':'; '.join(SOURCE_REGISTRY[x][0] for x in ids) or 'Not established',
+        audit.append({'Indicator':indicator_guide[field][0], 'What it means':indicator_guide[field][1], 'Reference providers':'; '.join(SOURCE_REGISTRY[x][0] for x in ids) or 'Not established',
                       'Reference period':entry.get('reference_period','Unknown'),
                       'Original file':entry.get('original_file','Not supplied'),
                       'Status':provenance_status(field)})
     audit_df=pd.DataFrame(audit)
-    st.dataframe(audit_df,hide_index=True,use_container_width=True)
-    st.download_button('Download source audit CSV',audit_df.to_csv(index=False).encode('utf-8'),file_name='source_audit.csv',mime='text/csv')
+    st.dataframe(audit_df,hide_index=True,use_container_width=True,height=420, column_config={
+        'Indicator': st.column_config.TextColumn('Indicator', width='large'),
+        'What it means': st.column_config.TextColumn('What it means', width='large'),
+        'Reference providers': st.column_config.TextColumn('Reference providers', width='large'),
+    })
+    with st.expander('Read all indicator definitions', expanded=False):
+        for indicator, definition in indicator_guide.values():
+            st.markdown(f'**{indicator}** — {definition}')
+    st.download_button('Download data dictionary and source documentation (CSV)',audit_df.assign(**{'Technical field':list(FIELD_SOURCES)}).to_csv(index=False).encode('utf-8'),file_name='source_audit.csv',mime='text/csv')
     st.caption('Source documentation file: data/source_provenance.json. Each field entry needs source_ids, reference_period, original_file and method. Add entries only after reviewing the original export and its transformation. Existing routing fields remain provisional until their source and method are documented.')
     st.caption('Current-year totals may be incomplete. Full-year year-over-year comparisons are disabled for the current calendar year.')
     k1,k2,k3,k4=st.columns(4)
