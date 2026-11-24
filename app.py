@@ -747,16 +747,46 @@ with t3:
         lon = pd.to_numeric(hospital.get("lon"), errors="coerce")
         if pd.isna(lat) or pd.isna(lon):
             continue
-        hospital_type = html.escape(str(hospital.get("type", "Not specified")))
-        trauma = html.escape(str(hospital.get("adult_level1_trauma", "Not specified")))
+        # Hospital profiles: use the local CSV first, with campus reference details
+        # for the hospitals already listed in the project. Verify before publication.
+        profiles = [
+            ('loyola', 'Loyola Medicine', '2160 S. First Avenue, Maywood, IL 60153', 'https://www.loyolamedicine.org/'),
+            ('mount sinai', 'Sinai Chicago', '1500 S. Fairfield Avenue, Chicago, IL 60608', 'https://www.sinaichicago.org/'),
+            ('northwestern', 'Northwestern Medicine', '251 E. Huron Street, Chicago, IL 60611', 'https://www.nm.org/'),
+            ('rush', 'Rush University System for Health', '1653 W. Congress Parkway, Chicago, IL 60612', 'https://www.rush.edu/'),
+            ('lutheran general', 'Advocate Health Care', '1775 Dempster Street, Park Ridge, IL 60068', 'https://www.advocatehealth.com/'),
+            ('illinois masonic', 'Advocate Health Care', '836 W. Wellington Avenue, Chicago, IL 60657', 'https://www.advocatehealth.com/'),
+            ('uchicago', 'UChicago Medicine', '5841 S. Maryland Avenue, Chicago, IL 60637', 'https://www.uchicagomedicine.org/'),
+            ('university of chicago', 'UChicago Medicine', '5841 S. Maryland Avenue, Chicago, IL 60637', 'https://www.uchicagomedicine.org/'),
+            ('advocate christ', 'Advocate Health Care', '4440 W. 95th Street, Oak Lawn, IL 60453', 'https://www.advocatehealth.com/'),
+        ]
+        system, address, website = next(((sys, addr, url) for alias, sys, addr, url in profiles
+                                         if alias in hospital_name.lower()), ('Listed hospital', '', ''))
+        def profile_value(*keys):
+            for key in keys:
+                value = hospital.get(key)
+                if pd.notna(value) and str(value).strip():
+                    return str(value).strip()
+            return ''
+        hospital_type = profile_value('type') or 'Not specified'
+        trauma = profile_value('adult_level1_trauma')
+        trauma_label = ('Adult Level I Trauma Center (dataset)' if trauma.lower() in ('yes','true','1','1.0')
+                        else 'Adult Level I designation: ' + (trauma or 'Not specified'))
+        address = profile_value('address','street_address') or address
+        website_link = (f'<a href="{html.escape(website, quote=True)}" target="_blank" rel="noopener noreferrer">Official healthcare system website</a>' if website else '')
         popup_html = (
-            f'<div style="font-family:Arial;min-width:220px">'
-            f'<b>{html.escape(hospital_name)}</b><hr>'
-            f'Type: {hospital_type}<br>Adult Level I (dataset): {trauma}</div>'
+            '<div style="font-family:Arial,sans-serif;min-width:275px;line-height:1.6;color:#06264A">'
+            '<div style="background:#06264A;color:white;padding:10px;border-radius:7px 7px 0 0">'
+            f'<strong>{html.escape(system.upper())}</strong><br>{html.escape(hospital_name)}</div>'
+            '<div style="padding:10px">'
+            f'<b>{html.escape(trauma_label)}</b><br>'
+            f'{html.escape(address or "Address not available")}<br>'
+            f'{html.escape(hospital_type)}<br>{website_link}'
+            '<p style="font-size:11px;margin-bottom:0">Campus details and trauma designation require confirmation before publication.</p></div></div>'
         )
         folium.Marker(
             [float(lat), float(lon)], tooltip=hospital_name,
-            popup=folium.Popup(popup_html, max_width=320),
+            popup=folium.Popup(popup_html, max_width=380),
             icon=folium.Icon(color="cadetblue", icon="plus-sign")
         ).add_to(other_layer)
 
