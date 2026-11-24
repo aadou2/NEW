@@ -618,7 +618,7 @@ with t2:
     st.caption('Each bubble is one community area. Association does not establish that the factor causes shootings.')
     st.subheader('What do the numbers suggest?')
     st.write('This optional analysis looks for patterns between poverty, unemployment, and shooting victim rates across Chicago. It accounts for differences in community population and reporting year. A relationship in the data does **not** mean one condition causes shootings.')
-    show_model = st.checkbox('Show exploratory statistical analysis (pending professor review)', value=False, key='show_exploratory_model')
+    show_model = st.checkbox('Show statistical analysis', value=False, key='show_exploratory_model')
     if show_model:
         predictors = ['pct_poverty', 'pct_unemployed']
         model_data = D[['ca_name', 'year', 'shot_total', 'population'] + predictors].dropna().copy()
@@ -646,6 +646,30 @@ with t2:
                         'Estimated rate difference for a 1-point increase': f'{abs(change):.1f}% {direction}'})
                 st.dataframe(pd.DataFrame(results), hide_index=True, use_container_width=True)
                 st.caption('These are model-based associations, not predictions or evidence that changing poverty or unemployment will change shootings. Other important factors may be missing.')
+                st.subheader('How closely does the model match recorded shootings?')
+                st.write('Each dot represents a Chicago community area. The horizontal axis shows the number of shooting victims estimated by the model, and the vertical axis shows the actual recorded number. Dots closer to the dashed line indicate a closer match.')
+                # In-sample fitted values for the selected reporting year, not future predictions.
+                model_data['model_estimate'] = model.predict(
+                    X, offset=np.log(model_data.population.astype(float)))
+                comparison = model_data[model_data.year.eq(year)].copy()
+                if not comparison.empty:
+                    fig_model = px.scatter(
+                        comparison, x='model_estimate', y='shot_total',
+                        hover_name='ca_name',
+                        labels={'model_estimate': 'Model-estimated shooting victims',
+                                'shot_total': 'Recorded shooting victims'},
+                        height=410)
+                    fig_model.update_traces(marker=dict(color=TEAL, size=10, opacity=.8))
+                    limit = float(max(comparison['model_estimate'].max(),
+                                      comparison['shot_total'].max(), 1)) * 1.05
+                    fig_model.add_shape(type='line', x0=0, y0=0, x1=limit, y1=limit,
+                                        line=dict(color=RED, dash='dash', width=2))
+                    fig_model.update_xaxes(range=[0, limit])
+                    fig_model.update_yaxes(range=[0, limit])
+                    st.plotly_chart(fig_model, use_container_width=True)
+                    st.caption(f'Selected year: {year}. These are estimates for records used to fit the model, not forecasts or proof of cause and effect. The dashed line represents a perfect match.')
+                else:
+                    st.info(f'No complete model records are available for {year}.')
                 if pd.notna(dispersion) and dispersion > 1.5:
                     st.warning('The data vary more than this simple model expects, so these estimates may be unreliable.')
                 with st.expander('How was this calculated? (technical details)'):
