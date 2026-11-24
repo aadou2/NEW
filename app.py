@@ -437,8 +437,7 @@ with t1:
         insight3='**Estimated trauma-center drive:** No data available.'
     for insight in (insight1,insight2,insight3):
         st.markdown('- '+insight)
-    st.caption('Automatically calculated from your selected year; descriptive observations, not validated public-health recommendations.')
-    left,right=st.columns([1.55,1],gap='large')
+    left,right=st.container(),st.container()
     with left:
         st.subheader('Where are shooting victims concentrated?')
         choices={'Victims per 10k':'shot_rate_per_10k','Total shooting victims':'shot_total','Poverty (%)':'pct_poverty','Unemployment (%)':'pct_unemployed'}
@@ -450,13 +449,7 @@ with t1:
         import branca.colormap as bcm
         cmap=bcm.LinearColormap(['#fff7bc','#fec44f','#f03b20','#800026'],vmin=vmin,vmax=max(vmax,vmin+.01),caption=choice)
         show_trauma_on_main=st.checkbox('Show listed trauma hospitals on this map',value=False,key='main_trauma_markers')
-        show_county=True
         mp=folium.Map(location=[41.84,-87.68],zoom_start=10,tiles='OpenStreetMap',control_scale=True)
-        county_geo, county_error = (
-        load_cook_county_boundary() if show_county else (None, None))
-        if county_error:
-            st.info('Cook County boundary temporarily unavailable. The Chicago community map still works. '
-                    'You can also place cook_county_boundary.geojson in the data/ folder for offline use.')
         lookup=current.set_index('ca_num')
         def style(feature):
             cid=int(feature['properties']['ca_num']);val=values.get(cid,np.nan)
@@ -469,15 +462,6 @@ with t1:
             details=''.join(f'<tr><td style="padding:3px 8px">{html.escape(k)}</td><td><b>{html.escape(str(val))}</b></td></tr>' for k,val in fields)
             popup=folium.Popup(f'<div style="font:13px Arial;width:315px"><h3>{html.escape(str(r.ca_name))} · {year}</h3><table>{details}</table><p style="font-size:11px">Source definitions and years require verification. Travel time is estimated, not EMS response time.</p></div>',max_width=380)
             folium.GeoJson(feature,style_function=style,highlight_function=lambda f:{'weight':3,'color':'#111827','fillOpacity':.88},tooltip=f'{r.ca_name}: {choice} {fmt(get(r,field),1)}',popup=popup).add_to(mp)
-        # Draw the county outline on top of the Chicago polygons for visibility.
-        if show_county and county_geo:
-            folium.GeoJson(
-                county_geo, name='Cook County boundary (outline)',
-                style_function=lambda f: {'color':'#6D4AC6','weight':4,'opacity':1,
-                                          'fillOpacity':0,'dashArray':'9,5'},
-                tooltip='Cook County boundary'
-            ).add_to(mp)
-
         # Add Stroger Hospital to the Overview map
         folium.Marker(
             location=[41.8564, -87.6663],
@@ -551,12 +535,12 @@ with t1:
         """
         mp.get_root().html.add_child(folium.Element(vertical_legend))
         st_folium(mp,height=520,use_container_width=True,key=f'community_map_{year}_{choice}',returned_objects=['last_active_drawing'])
-        st.caption('Click any Chicago community polygon for its detailed popup. The dashed purple boundary shows Cook County, including suburban areas not covered by these shooting datasets. Use the left selector to update all charts.')
+        st.caption('Click any Chicago community polygon for its detailed popup. Use the left selector to update all charts.')
     with right:
         st.subheader('Top 10 community areas')
         top=current.nlargest(10,'shot_total').sort_values('shot_total')
-        fig=px.bar(top,x='shot_total',y='ca_name',orientation='h',labels={'shot_total':'Shooting victims','ca_name':''},height=490)
-        fig.update_traces(marker_color=TEAL);fig.update_layout(margin=dict(l=0,r=0,t=5,b=0),showlegend=False)
+        fig=px.bar(top,x='shot_total',y='ca_name',orientation='h',labels={'shot_total':'Shooting victims','ca_name':''},height=540)
+        fig.update_traces(marker_color=TEAL);fig.update_layout(autosize=True,margin=dict(l=25,r=35,t=20,b=65),showlegend=False);fig.update_yaxes(automargin=True);fig.update_xaxes(automargin=True)
         st.plotly_chart(fig,use_container_width=True)
     if row is not None:
         st.subheader(f'{area}: socioeconomic & healthcare snapshot')
@@ -566,8 +550,8 @@ with t1:
     st.subheader('How have shootings changed over time?')
     trend=D_window if row is None else D_window[D_window.ca_name==area]
     trend=trend.groupby('year',as_index=False)[['fatal','nonfatal']].sum()
-    fig=px.bar(trend,x='year',y=['fatal','nonfatal'],barmode='stack',color_discrete_map={'fatal':RED,'nonfatal':TEAL},labels={'value':'Victims','variable':'Outcome'},height=330)
-    fig.update_layout(xaxis=dict(dtick=1),margin=dict(l=0,r=0,t=5,b=0));st.plotly_chart(fig,use_container_width=True)
+    fig=px.bar(trend,x='year',y=['fatal','nonfatal'],barmode='stack',color_discrete_map={'fatal':RED,'nonfatal':TEAL},labels={'value':'Victims','variable':'Outcome'},height=440)
+    fig.update_layout(autosize=True,xaxis=dict(dtick=1,tickangle=-45,automargin=True),margin=dict(l=25,r=25,t=55,b=85),legend=dict(orientation='h',y=1.12,x=0));fig.update_yaxes(automargin=True);st.plotly_chart(fig,use_container_width=True)
 
 with t2:
     st.subheader('How are neighborhood conditions related to gun violence?')
@@ -701,19 +685,18 @@ with t3:
     hospital_map = folium.Map(location=[41.84, -87.68], zoom_start=10, tiles="OpenStreetMap", control_scale=True)
 
     show_catchments = st.checkbox(
-        "Show illustrative hospital coverage areas",
-        value=False,
-        disabled=not bool(COVERAGE.get("features")),
+        "Show estimated hospital access areas",
+        value=True,
         key="show_hospital_catchments"
     )
 
     coverage_minutes = st.slider(
-        "Coverage threshold (minutes)",
+        "Estimated driving time threshold (minutes)",
         min_value=5,
         max_value=30,
         value=15,
         step=5,
-        disabled=not show_catchments
+        key="hospital_coverage_minutes"
     )
 
     stroger_lat, stroger_lon = 41.8564, -87.6663  # Approximate map coordinates
@@ -862,9 +845,26 @@ with t3:
         coverage_layer.add_to(hospital_map)
 
         if not matching_areas:
-            st.warning(
-                f"No coverage data found for {coverage_minutes} minutes."
-            )
+            # Fallback: classify existing community estimates, not fabricated drive-time polygons.
+            access_layer = folium.FeatureGroup(name="Community access estimates", show=True)
+            access_rows = current.drop_duplicates('ca_num').set_index('ca_num')
+            within = 0
+            available = 0
+            for feature in G.get('features', []):
+                cid = int(feature['properties']['ca_num'])
+                if cid not in access_rows.index:
+                    continue
+                community = access_rows.loc[cid]
+                minutes = pd.to_numeric(community.get('profile_trauma_drive_min'), errors='coerce')
+                known = pd.notna(minutes)
+                reached = bool(known and minutes <= coverage_minutes)
+                available += int(known)
+                within += int(reached)
+                color = '#078B91' if reached else ('#E6A23C' if known else '#A0AEC0')
+                label = f"{community.ca_name}: {minutes:.1f} min (estimate)" if known else f"{community.ca_name}: no estimate"
+                folium.GeoJson(feature, style_function=lambda f, c=color: {'color':c,'weight':1,'fillColor':c,'fillOpacity':.28}, tooltip=html.escape(label)).add_to(access_layer)
+            access_layer.add_to(hospital_map)
+            st.caption(f"{within} of {available} communities with estimates are within {coverage_minutes} minutes of their listed nearest trauma center. Teal: within threshold; amber: above; gray: unavailable. Community shading uses existing unverified estimates, not actual driving coverage or ambulance times.")
         else:
             st.caption(
                 f"Showing modeled {coverage_minutes}-minute driving-time "
@@ -881,7 +881,7 @@ with t3:
         hospital_map,
         height=470,
         use_container_width=True,
-        key="hospital_map",
+        key=f"hospital_map_{year}_{show_catchments}_{coverage_minutes}_{show_other}",
         returned_objects=[]
     )
     st.caption("Navy: Stroger Hospital · Turquoise-blue: other locally listed hospitals, if available. "
@@ -1150,7 +1150,7 @@ with t5:
         agency,title,url=SOURCE_REGISTRY[source_id]
         st.markdown(f'**{agency} — [{title}]({url})**  \n{purpose}')
     st.markdown('### Data Sources, Definitions & Documentation')
-    st.caption('Use this guide to understand each indicator, its meaning and the status of its supporting documentation. Definitions describe intended measures, not verified source metadata.')
+    st.caption('Use this guide to understand each indicator, its meaning and the status of its supporting documentation.')
     st.markdown('[Census poverty definition](https://www.census.gov/topics/income-poverty/guidance/poverty-measures.html) · [Census housing cost reference](https://www.census.gov/library/stories/2022/12/housing-costs-burden.html)')
     indicator_guide = {'eviction_filing_rate': ('Eviction Filing Rate',
                               'Eviction court filings relative to renter households; the rate unit is not yet '
@@ -1193,7 +1193,6 @@ with t5:
                            'Total shooting victims divided by population, multiplied by 10,000.'),
      'shot_total': ('Total Shooting Victims',
                     'Recorded fatal and nonfatal shooting victims combined; not a count of distinct incidents.')}
-    st.caption('Reference providers are suggested sources; original dataset provenance has not been verified.')
     audit=[]
     for field, ids in FIELD_SOURCES.items():
         entry=PROVENANCE.get(field,{}) if isinstance(PROVENANCE.get(field,{}),dict) else {}
@@ -1235,13 +1234,14 @@ with t5:
 
 **What-if controls:** Sliders change model inputs and display the relative fitted rate. They **do not** estimate the effect of a real intervention. Repeated area observations, time-varying measurement and unmeasured confounders limit inference. The model has not been independently validated for forecasting or policy use.''')
     with st.expander('Hospital access and financial methodology'):
-        st.markdown('''**Access:** Existing travel times are displayed as unverified project estimates. Coverage polygons require documented routing methodology. They are not ambulance response times, patient transport times, or observed patient catchment areas.
+        st.markdown('''**Access:** Existing travel times are displayed as unverified project estimates. Coverage polygons require documented routing methodology. When unavailable, community shading classifies existing estimated travel times against the selected threshold; it does not represent a driving-time catchment. They are not ambulance response times, patient transport times, or observed patient catchment areas.
 
 **Finances:** Neighborhood shooting totals are not hospital patient counts; hospital-specific firearm injury counts are not available. The existing trauma_hospitals.csv amounts are displayed without changing their values. CMS and IDPH are verification references; original source reconciliation remains pending. Hospital records show hospital-wide financial indicators. They cannot establish the cost, reimbursement, uncompensated care, or net financial loss attributable specifically to gunshot patients. Financial reporting years may differ from shooting years.''')
     st.markdown('### 3. Understanding the findings')
     st.write('These limitations matter when comparing neighborhoods or using findings to guide further research.')
     limitations = [
         ('Recent eviction records','Community-area eviction filing records for 2020–2025 have been requested but are not available in the project inputs; historical eviction values should not be interpreted as recent annual observations.'),
+        ('Source verification','Reference providers are suggested sources; original dataset provenance and indicator definitions have not been independently verified.'),
         ('Indicator timing','Socioeconomic estimates may cover multi-year reference periods or be repeated across reporting years.'),
         ('Geographic interpretation','Community-area averages conceal variation within areas and do not identify individual risk.'),
         ('Healthcare access','Modeled travel reach excludes observed ambulance dispatch, traffic conditions, treatment routing and patient origin.'),
