@@ -616,66 +616,84 @@ with t2:
     fig=px.scatter(valid,x=col,y='shot_rate_per_10k',size='shot_total',hover_name='ca_name',color='shot_rate_per_10k',color_continuous_scale=[(0,'#DDF2F6'),(.5,TEAL),(1,RED)],labels={col:factor,'shot_rate_per_10k':'Shooting victims per 10,000'},height=410)
     st.plotly_chart(fig,use_container_width=True)
     st.caption('Each bubble is one community area. Association does not establish that the factor causes shootings.')
-    st.subheader('What do the numbers suggest?')
-    st.write('This optional analysis looks for patterns between poverty, unemployment, and shooting victim rates across Chicago. It accounts for differences in community population and reporting year. A relationship in the data does **not** mean one condition causes shootings.')
-    show_model = st.checkbox('Show statistical analysis', value=False, key='show_exploratory_model')
-    if show_model:
-        predictors = ['pct_poverty', 'pct_unemployed']
-        model_data = D[['ca_name', 'year', 'shot_total', 'population'] + predictors].dropna().copy()
-        model_data = model_data[(model_data.population > 0) & (model_data.shot_total >= 0)]
-        if len(model_data) < 10:
-            st.info('Not enough complete records to show the analysis.')
-        else:
-            try:
-                X = pd.concat([model_data[predictors].astype(float),
-                    pd.get_dummies(model_data.year.astype(str), prefix='year', drop_first=True, dtype=float)], axis=1)
-                X = sm.add_constant(X)
-                model = sm.GLM(model_data.shot_total.astype(float), X,
-                    family=sm.families.Poisson(),
-                    offset=np.log(model_data.population.astype(float))).fit(cov_type='HC1')
-                dispersion = model.pearson_chi2 / model.df_resid if model.df_resid > 0 else np.nan
-                c1, c2 = st.columns(2)
-                c1.metric('Records analyzed', f'{len(model_data):,}', help='Community-area and year records with complete data.')
-                c2.metric('Factors examined', '2', help='Poverty and unemployment.')
-                results = []
-                for key, label in [('pct_poverty', 'Poverty'), ('pct_unemployed', 'Unemployment')]:
-                    ratio = float(np.exp(model.params[key]))
-                    change = (ratio - 1) * 100
-                    direction = 'higher' if change > 0 else 'lower' if change < 0 else 'unchanged'
-                    results.append({'Factor': label,
-                        'Estimated rate difference for a 1-point increase': f'{abs(change):.1f}% {direction}'})
-                st.dataframe(pd.DataFrame(results), hide_index=True, use_container_width=True)
-                st.caption('These are model-based associations, not predictions or evidence that changing poverty or unemployment will change shootings. Other important factors may be missing.')
-                st.subheader('How closely does the model match recorded shootings?')
-                st.write('Each dot represents a Chicago community area. The horizontal axis shows the number of shooting victims estimated by the model, and the vertical axis shows the actual recorded number. Dots closer to the dashed line indicate a closer match.')
-                # In-sample fitted values for the selected reporting year, not future predictions.
-                model_data['model_estimate'] = model.predict(
-                    X, offset=np.log(model_data.population.astype(float)))
-                comparison = model_data[model_data.year.eq(year)].copy()
-                if not comparison.empty:
-                    fig_model = px.scatter(
-                        comparison, x='model_estimate', y='shot_total',
-                        hover_name='ca_name',
-                        labels={'model_estimate': 'Model-estimated shooting victims',
-                                'shot_total': 'Recorded shooting victims'},
-                        height=410)
-                    fig_model.update_traces(marker=dict(color=TEAL, size=10, opacity=.8))
-                    limit = float(max(comparison['model_estimate'].max(),
-                                      comparison['shot_total'].max(), 1)) * 1.05
-                    fig_model.add_shape(type='line', x0=0, y0=0, x1=limit, y1=limit,
-                                        line=dict(color=RED, dash='dash', width=2))
-                    fig_model.update_xaxes(range=[0, limit])
-                    fig_model.update_yaxes(range=[0, limit])
-                    st.plotly_chart(fig_model, use_container_width=True)
-                    st.caption(f'Selected year: {year}. These are estimates for records used to fit the model, not forecasts or proof of cause and effect. The dashed line represents a perfect match.')
-                else:
-                    st.info(f'No complete model records are available for {year}.')
-                if pd.notna(dispersion) and dispersion > 1.5:
-                    st.warning('The data vary more than this simple model expects, so these estimates may be unreliable.')
-                with st.expander('How was this calculated? (technical details)'):
-                    st.write('Exploratory Poisson regression for victim counts, adjusted for population size and reporting year, with robust standard errors. A one-point increase means, for example, poverty changing from 20% to 21%. Repeated community measures and extra variation can limit reliability. This analysis has not been independently validated.')
-            except Exception as exc:
-                st.info(f'The optional analysis is unavailable: {exc}')
+    st.subheader('Poisson Regression Model — What do the numbers suggest?')
+    st.write('This analysis looks for patterns between poverty, unemployment, and shooting victim rates across Chicago. It accounts for differences in community population and reporting year. A relationship in the data does **not** mean one condition causes shootings.')
+    predictors = ['pct_poverty', 'pct_unemployed']
+    model_data = D[['ca_name', 'year', 'shot_total', 'population'] + predictors].dropna().copy()
+    model_data = model_data[(model_data.population > 0) & (model_data.shot_total >= 0)]
+    if len(model_data) < 10:
+        st.info('Not enough complete records to show the analysis.')
+    else:
+        try:
+            X = pd.concat([model_data[predictors].astype(float),
+                pd.get_dummies(model_data.year.astype(str), prefix='year', drop_first=True, dtype=float)], axis=1)
+            X = sm.add_constant(X)
+            model = sm.GLM(model_data.shot_total.astype(float), X,
+                family=sm.families.Poisson(),
+                offset=np.log(model_data.population.astype(float))).fit(cov_type='HC1')
+            dispersion = model.pearson_chi2 / model.df_resid if model.df_resid > 0 else np.nan
+            c1, c2 = st.columns(2)
+            c1.metric('Records analyzed', f'{len(model_data):,}', help='Community-area and year records with complete data.')
+            c2.metric('Factors examined', '2', help='Poverty and unemployment.')
+            results = []
+            for key, label in [('pct_poverty', 'Poverty'), ('pct_unemployed', 'Unemployment')]:
+                ratio = float(np.exp(model.params[key]))
+                change = (ratio - 1) * 100
+                direction = 'higher' if change > 0 else 'lower' if change < 0 else 'unchanged'
+                results.append({'Factor': label,
+                    'Estimated rate difference for a 1-point increase': f'{abs(change):.1f}% {direction}'})
+            st.dataframe(pd.DataFrame(results), hide_index=True, use_container_width=True)
+            st.caption('These are model-based associations, not predictions or evidence that changing poverty or unemployment will change shootings. Other important factors may be missing.')
+            st.subheader('How closely does the model match recorded shootings?')
+            st.write('Each dot represents a Chicago community area. The horizontal axis shows the number of shooting victims estimated by the model, and the vertical axis shows the actual recorded number. Dots closer to the dashed line indicate a closer match.')
+            # In-sample fitted values for the selected reporting year, not future predictions.
+            model_data['model_estimate'] = model.predict(
+                X, offset=np.log(model_data.population.astype(float)))
+            comparison = model_data[model_data.year.eq(year)].copy()
+            if not comparison.empty:
+                fig_model = px.scatter(
+                    comparison, x='model_estimate', y='shot_total',
+                    hover_name='ca_name',
+                    labels={'model_estimate': 'Model-estimated shooting victims',
+                            'shot_total': 'Recorded shooting victims'},
+                    height=410)
+                fig_model.update_traces(marker=dict(color=TEAL, size=10, opacity=.8))
+                limit = float(max(comparison['model_estimate'].max(),
+                                  comparison['shot_total'].max(), 1)) * 1.05
+                fig_model.add_shape(type='line', x0=0, y0=0, x1=limit, y1=limit,
+                                    line=dict(color=RED, dash='dash', width=2))
+                fig_model.update_xaxes(range=[0, limit])
+                fig_model.update_yaxes(range=[0, limit])
+                st.plotly_chart(fig_model, use_container_width=True)
+                st.caption(f'Selected year: {year}. These are estimates for records used to fit the model, not forecasts or proof of cause and effect. The dashed line represents a perfect match.')
+            else:
+                st.info(f'No complete model records are available for {year}.')
+            if pd.notna(dispersion) and dispersion > 1.5:
+                st.warning('The data vary more than this simple model expects, so these estimates may be unreliable.')
+            st.subheader('Explore hypothetical neighborhood conditions')
+            st.write('Choose a community and adjust poverty and unemployment to explore how the model estimates shooting rates relative to the original conditions.')
+            scenario_rows = model_data[model_data.year.eq(year)].sort_values('ca_name')
+            if not scenario_rows.empty:
+                scenario_areas = scenario_rows.ca_name.unique().tolist()
+                chosen = st.selectbox('Community area for scenario', scenario_areas,
+                    index=scenario_areas.index(area) if area in scenario_areas else 0,
+                    key=f'scenario_area_{year}')
+                base = scenario_rows[scenario_rows.ca_name.eq(chosen)].iloc[0]
+                bp, bu = float(base.pct_poverty), float(base.pct_unemployed)
+                st.caption(f'Original conditions in {chosen}: poverty {bp:.1f}%, unemployment {bu:.1f}%.')
+                sc1, sc2 = st.columns(2)
+                p = sc1.slider('Poverty (%)', 0.0, 100.0, bp, 0.1, key=f'scenario_p_{year}_{chosen}')
+                u = sc2.slider('Unemployment (%)', 0.0, 100.0, bu, 0.1, key=f'scenario_u_{year}_{chosen}')
+                ratio = float(np.exp(model.params['pct_poverty']*(p-bp) + model.params['pct_unemployed']*(u-bu)))
+                change = (ratio-1)*100
+                st.metric('Estimated rate change', f'{change:+.1f}%')
+                st.caption('Compared with the original model-estimated rate for this community. Population, year and other model inputs are held fixed. Extreme slider values may be outside the observed data. This is not a forecast or evidence of a causal effect.')
+            else:
+                st.info('No complete community records are available for this scenario in the selected year.')
+            with st.expander('How was this calculated? (technical details)'):
+                st.write('Exploratory Poisson regression for victim counts, adjusted for population size and reporting year, with robust standard errors. A one-point increase means, for example, poverty changing from 20% to 21%. Repeated community measures and extra variation can limit reliability. This analysis has not been independently validated.')
+        except Exception as exc:
+            st.info(f'The analysis is unavailable: {exc}')
 
 with t3:
     st.caption('Healthcare access values and hospital locations are existing project estimates; original source periods and methods remain unconfirmed. Hospital financial records are displayed as supplied; original source reconciliation is pending. See Tab 5.')
