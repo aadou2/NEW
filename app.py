@@ -388,20 +388,20 @@ D_window=D[D.year.between(range_start,range_end)].copy()
 
 current=D[D.year==year].copy()
 areas=sorted(current.ca_name.unique())
-if 'selected_area' not in st.session_state: st.session_state.selected_area='All Chicago'
-if st.session_state.selected_area not in ['All Chicago']+areas: st.session_state.selected_area='All Chicago'
-area=st.sidebar.selectbox('Focus community area',['All Chicago']+areas,key='selected_area')
+if 'selected_area' not in st.session_state: st.session_state.selected_area='All Chicago Community Areas'
+if st.session_state.selected_area not in ['All Chicago Community Areas']+areas: st.session_state.selected_area='All Chicago Community Areas'
+area=st.sidebar.selectbox('Focus community area',['All Chicago Community Areas']+areas,key='selected_area')
 st.markdown(f"""
 <section class="cch-hero">
   <div class="eyebrow">Community health research | Chicago, Illinois</div>
   <h1>Chicago Gun Violence &amp; Healthcare Insights</h1>
-  <p>Explore neighborhood conditions, shooting victim trends and access to healthcare across Chicago.</p>
+  <p>Explore neighborhood conditions, trends in gun violence and access to trauma care across Chicago.</p>
   <p style="margin-top:15px;margin-bottom:0"><a href="https://cookcountyhealth.org/locations/john-h-stroger-jr-hospital-of-cook-county/" target="_blank" rel="noopener noreferrer">Cook County Health — Stroger Hospital</a></p>
 </section>
 """, unsafe_allow_html=True)
-t1,t2,t3,t4,t5=st.tabs(['🗺️ Overview & Map','📊 Socioeconomic & Regression','🏥 Healthcare & Hospital Impact','🏘️ Neighborhood Comparison','📚 Glossary & Resources'])
+t1,t2,t3,t4,t6,t5=st.tabs(['🗺️ Overview & Map','📊 Socioeconomic Factors','🏥 Trauma Center Access','🏘️ Community Area Comparison','💵 Economic Impact','📚 Glossary & Resources'])
 
-row=current[current.ca_name==area].iloc[0] if area!='All Chicago' else None
+row=current[current.ca_name==area].iloc[0] if area!='All Chicago Community Areas' else None
 selected=current if row is None else current[current.ca_name==area]
 shot=selected.shot_total.sum(min_count=len(selected));fatal=selected.fatal.sum(min_count=len(selected));nonfatal=selected.nonfatal.sum(min_count=len(selected));pop=selected.population.sum(min_count=len(selected))
 rate=shot/pop*10000 if pop>0 else np.nan
@@ -410,7 +410,7 @@ with t1:
     st.subheader(f'{area} · {year}')
     a,b,c,d=st.columns(4)
     a.metric('Shooting victims',fmt(shot));b.metric('Fatal victims',fmt(fatal));c.metric('Nonfatal victims',fmt(nonfatal));d.metric('Victims per 10k',fmt(rate,1))
-    st.markdown('#### Community insights at a glance')
+    st.markdown('#### Key findings')
     valid_rate=current.dropna(subset=['shot_rate_per_10k'])
     if not valid_rate.empty:
         highest=valid_rate.loc[valid_rate.shot_rate_per_10k.idxmax()]
@@ -593,7 +593,7 @@ with t2:
     fig=px.scatter(valid,x=col,y='shot_rate_per_10k',size='shot_total',hover_name='ca_name',color='shot_rate_per_10k',color_continuous_scale=[(0,'#DDF2F6'),(.5,TEAL),(1,RED)],labels={col:factor,'shot_rate_per_10k':'Shooting victims per 10,000'},height=410)
     st.plotly_chart(fig,use_container_width=True)
     st.caption('Each bubble is one community area. Association does not establish that the factor causes shootings.')
-    st.subheader('Poisson Regression Model — What do the numbers suggest?')
+    st.subheader('Statistical model (Poisson regression)')
     st.write('This analysis looks for patterns between poverty, unemployment, and shooting victim rates across Chicago. It accounts for differences in community population and reporting year. A relationship in the data does **not** mean one condition causes shootings.')
     predictors = ['pct_poverty', 'pct_unemployed']
     model_data = D[['ca_name', 'year', 'shot_total', 'population'] + predictors].dropna().copy()
@@ -673,8 +673,8 @@ with t2:
             st.info(f'The analysis is unavailable: {exc}')
 
 with t3:
-    st.subheader('Healthcare access and hospital impact')
-    st.write('Explore trauma center locations, straight-line accessibility, and hospital-wide financial information.')
+    st.subheader('Trauma center access')
+    st.write('Explore trauma center locations and straight-line distances from Chicago community areas.')
     if row is not None:
         a,b,c=st.columns(3)
         a.metric('Nearest listed center',str(get(row,'profile_nearest_center')) if pd.notna(get(row,'profile_nearest_center')) else 'Data unavailable')
@@ -694,55 +694,12 @@ with t3:
         "**Address:** 1969 W. Ogden Avenue, Chicago, IL 60612. "
         "[Official Stroger Hospital page](https://cookcountyhealth.org/locations/john-h-stroger-jr-hospital-of-cook-county/)"
     )
-    finance_labels = {
-        'hospital': 'Hospital', 'type': 'Hospital type',
-        'fiscal_year_end': 'Fiscal year end',
-        'total_costs': 'Total hospital costs ($)',
-        'net_patient_revenue': 'Net patient revenue ($)',
-        'charity_care_cost': 'Charity care costs ($)',
-        'uncompensated_care_cost': 'Uncompensated care costs ($)',
-    }
-    money_fields = ['total_costs','net_patient_revenue','charity_care_cost','uncompensated_care_cost']
-    def show_financial_table(frame, include_type=True):
-        cols = [c for c in finance_labels if c in frame.columns and (include_type or c != 'type')]
-        table = frame[cols].rename(columns=finance_labels)
-        formats = {finance_labels[c]: '${:,.0f}' for c in money_fields if c in cols}
-        st.dataframe(table.style.format(formats, na_rep='N/A'), hide_index=True, use_container_width=True)
-
-    stroger_data = H[H['hospital'].astype(str).str.contains(r'Stroger|Cook County Hospital', case=False, regex=True, na=False)]
-    if not stroger_data.empty:
-        st.markdown('**Stroger Hospital financial summary**')
-        show_financial_table(stroger_data, include_type=False)
-    else:
-        st.info('No Stroger financial record is available in the hospital CSV.')
-
-    st.subheader('Hospital financial comparison')
-    st.caption('Hospital-wide financial figures (USD). Reporting periods may differ.')
-    sort_label = st.selectbox('Sort hospitals by', ['Hospital (A–Z)'] + [finance_labels[c] for c in money_fields], key='finance_sort')
-    sort_field = next((c for c in money_fields if finance_labels[c] == sort_label), 'hospital')
-    ordered = H.sort_values(sort_field, ascending=sort_field == 'hospital', na_position='last')
-    show_financial_table(ordered)
-    chart_label = st.selectbox('Financial measure to compare', [finance_labels[c] for c in money_fields], key='finance_chart')
-    chart_field = next(c for c in money_fields if finance_labels[c] == chart_label)
-    financial = H.dropna(subset=[chart_field]).sort_values(chart_field)
-    if not financial.empty:
-        fig = px.bar(financial, x=chart_field, y='hospital', orientation='h',
-                     labels={chart_field:chart_label,'hospital':''}, height=max(400,45*len(financial)))
-        fig.update_traces(marker_color=[NAVY if 'stroger' in str(n).lower() else TEAL for n in financial.hospital],
-                          hovertemplate='%{y}<br>$%{x:,.0f}<extra></extra>')
-        fig.update_xaxes(tickprefix='$', tickformat=',.0f')
-        st.plotly_chart(chart_style(fig), use_container_width=True)
-    else:
-        st.info('No numerical values are available for this financial measure.')
-    st.caption('Financial figures cover all hospital services, not only firearm injuries.')
-    st.markdown('[CMS Hospital Provider Cost Report — verification reference](https://data.cms.gov/provider-compliance/cost-reports/hospital-provider-cost-report)')
-
-    st.subheader('Neighborhood healthcare comparison')
-    with st.expander('Explore detailed neighborhood healthcare figures'):
+    st.subheader('Community area trauma care indicators')
+    with st.expander('Explore community area trauma care indicators'):
         st.dataframe(current[['ca_name','shot_rate_per_10k','profile_nearest_center','profile_trauma_drive_min','profile_clinics']].sort_values('shot_rate_per_10k',ascending=False).rename(columns={'ca_name':'Community area','shot_rate_per_10k':'Victims per 10,000','profile_nearest_center':'Nearest listed center','profile_trauma_drive_min':'Estimated drive (minutes)','profile_clinics':'Estimated clinics'}),hide_index=True,use_container_width=True)
 
 with t4:
-    st.subheader('Neighborhood comparison')
+    st.subheader('Community area comparison')
     st.write('Compare shooting victim rates and neighborhood conditions across Chicago. Choose communities below, or leave the selection empty to see all areas.')
     measures = {
         'Shooting victims per 10,000': 'shot_rate_per_10k',
@@ -754,7 +711,7 @@ with t4:
     filter_col, rank_col = st.columns([1.6, 1])
     with filter_col:
         neighborhoods = st.multiselect('Community areas (empty means all)', areas,
-            default=[area] if area != 'All Chicago' else [], key='compare_filter')
+            default=[area] if area != 'All Chicago Community Areas' else [], key='compare_filter')
     with rank_col:
         measure_label = st.selectbox('Compare by', list(measures), key='compare_measure')
     measure = measures[measure_label]
@@ -816,10 +773,53 @@ with t4:
             'Income per person ($)':'${:,.0f}'}
         st.dataframe(full.style.format({k:v for k,v in formats.items() if k in full}, na_rep='N/A'),
             hide_index=True, use_container_width=True)
-        st.download_button('Download comparison CSV',
-            full.to_csv(index=False).encode('utf-8'),
-            file_name=f'cook_county_neighborhood_comparison_{year}.csv',
-            mime='text/csv', key='download_comparison')
+
+with t6:
+    st.subheader("Economic impact: hospital costs")
+    st.warning("These figures describe hospital-wide financial activity, not the cost of treating firearm injuries. Source reconciliation remains pending.")
+    finance_labels = {
+        'hospital': 'Hospital', 'type': 'Hospital type',
+        'fiscal_year_end': 'Fiscal year end',
+        'total_costs': 'Total hospital costs ($)',
+        'net_patient_revenue': 'Net patient revenue ($)',
+        'charity_care_cost': 'Charity care costs ($)',
+        'uncompensated_care_cost': 'Uncompensated care costs ($)',
+    }
+    money_fields = ['total_costs','net_patient_revenue','charity_care_cost','uncompensated_care_cost']
+    def show_financial_table(frame, include_type=True):
+        cols = [c for c in finance_labels if c in frame.columns and (include_type or c != 'type')]
+        table = frame[cols].rename(columns=finance_labels)
+        formats = {finance_labels[c]: '${:,.0f}' for c in money_fields if c in cols}
+        st.dataframe(table.style.format(formats, na_rep='N/A'), hide_index=True, use_container_width=True)
+
+    stroger_data = H[H['hospital'].astype(str).str.contains(r'Stroger|Cook County Hospital', case=False, regex=True, na=False)]
+    if not stroger_data.empty:
+        st.markdown('**Stroger Hospital: reported hospital-wide figures**')
+        show_financial_table(stroger_data, include_type=False)
+    else:
+        st.info('No Stroger financial record is available in the hospital CSV.')
+
+    st.subheader('Hospital costs and revenue')
+    st.caption('Hospital-wide financial figures (USD). Reporting periods may differ.')
+    sort_label = st.selectbox('Sort hospitals by', ['Hospital (A–Z)'] + [finance_labels[c] for c in money_fields], key='finance_sort')
+    sort_field = next((c for c in money_fields if finance_labels[c] == sort_label), 'hospital')
+    ordered = H.sort_values(sort_field, ascending=sort_field == 'hospital', na_position='last')
+    show_financial_table(ordered)
+    chart_label = st.selectbox('Financial measure to compare', [finance_labels[c] for c in money_fields], key='finance_chart')
+    chart_field = next(c for c in money_fields if finance_labels[c] == chart_label)
+    financial = H.dropna(subset=[chart_field]).sort_values(chart_field)
+    if not financial.empty:
+        fig = px.bar(financial, x=chart_field, y='hospital', orientation='h',
+                     labels={chart_field:chart_label,'hospital':''}, height=max(400,45*len(financial)))
+        fig.update_traces(marker_color=[NAVY if 'stroger' in str(n).lower() else TEAL for n in financial.hospital],
+                          hovertemplate='%{y}<br>$%{x:,.0f}<extra></extra>')
+        fig.update_xaxes(tickprefix='$', tickformat=',.0f')
+        st.plotly_chart(chart_style(fig), use_container_width=True)
+    else:
+        st.info('No numerical values are available for this financial measure.')
+    st.caption('Financial figures cover all hospital services, not only firearm injuries.')
+    st.markdown('[CMS Hospital Provider Cost Report — verification reference](https://data.cms.gov/provider-compliance/cost-reports/hospital-provider-cost-report)')
+
 
 # Client-ready PDF report using the same selection and currently loaded dataset.
 def create_client_pdf(data, all_history, hospitals, reporting_year, community, start_year, end_year):
@@ -843,7 +843,7 @@ def create_client_pdf(data, all_history, hospitals, reporting_year, community, s
     styles.add(ParagraphStyle(name='CCHBody',parent=styles['BodyText'],fontSize=9,leading=13,spaceAfter=7))
     story=[Paragraph('Cook County Health | Community Insights',styles['CCHTitle']),
            Paragraph(f'{html.escape(community)} | Reporting year {reporting_year} | Historical view {start_year}–{end_year}',styles['CCHBody'])]
-    result=data if community=='All Chicago' else data[data.ca_name.eq(community)]
+    result=data if community=='All Chicago Community Areas' else data[data.ca_name.eq(community)]
     patients=result.shot_total.sum(min_count=len(result))
     fatal_n=result.fatal.sum(min_count=len(result))
     pop_sum=result.population.sum()
@@ -858,16 +858,16 @@ def create_client_pdf(data, all_history, hospitals, reporting_year, community, s
         ('ALIGN',(0,0),(-1,-1),'CENTER'),('VALIGN',(0,0),(-1,-1),'MIDDLE')]))
     story.extend([kpi_table,Spacer(1,12),Paragraph('Selected-year observations',styles['CCHHeading'])])
     valid=data.dropna(subset=['shot_rate_per_10k'])
-    if community=='All Chicago' and not valid.empty:
+    if community=='All Chicago Community Areas' and not valid.empty:
         top=valid.sort_values('shot_rate_per_10k',ascending=False).iloc[0]
         story.append(Paragraph(f'Highest observed community rate: {html.escape(str(top.ca_name))} ({top.shot_rate_per_10k:.1f} victims per 10k).',styles['CCHBody']))
-    elif community!='All Chicago' and not result.empty:
+    elif community!='All Chicago Community Areas' and not result.empty:
         r=result.iloc[0]
         if pd.notna(r.get('profile_trauma_drive_min',np.nan)):
             story.append(Paragraph(f'Estimated trauma-center driving time: {r.profile_trauma_drive_min:.1f} minutes. Not EMS transport time.',styles['CCHBody']))
 
     history=all_history[all_history.year.between(start_year,end_year)]
-    history=history if community=='All Chicago' else history[history.ca_name.eq(community)]
+    history=history if community=='All Chicago Community Areas' else history[history.ca_name.eq(community)]
     history=history.dropna(subset=['shot_total','population']).groupby('year',as_index=False)[['shot_total','population']].sum()
     history=history[history.population.gt(0)].copy()
     if not history.empty:
@@ -878,7 +878,7 @@ def create_client_pdf(data, all_history, hospitals, reporting_year, community, s
         ax.grid(axis='y',alpha=.25);fig.tight_layout()
         img=BytesIO();fig.savefig(img,format='png',dpi=140,bbox_inches='tight');plt.close(fig);img.seek(0)
         story.extend([Paragraph('Historical trend',styles['CCHHeading']),Image(img,width=505,height=178)])
-    if community=='All Chicago':
+    if community=='All Chicago Community Areas':
         top=data.dropna(subset=['shot_rate_per_10k']).sort_values('shot_rate_per_10k',ascending=False).head(6)
         if not top.empty:
             fig,ax=plt.subplots(figsize=(7.0,2.8))
@@ -896,14 +896,8 @@ def create_client_pdf(data, all_history, hospitals, reporting_year, community, s
 
 st.divider()
 with t5:
-    st.markdown('### At a glance')
-    st.markdown('''- **Shooting victims** counts people, not separate shooting incidents.
-- **Victims per 10,000** makes comparisons fairer between communities of different sizes.
-- **Estimated driving time** describes modeled access to listed hospitals, not ambulance response time.
-- **Hospital costs** describe whole hospitals, not the costs of treating gunshot patients.
-- **Model findings** show associations, not proof of causes.''')
     st.markdown('''This dashboard integrates Chicago community-area shooting-victim data, neighborhood indicators, hospital records, and geographic boundaries. The information supports **exploratory comparisons**, not causal conclusions, clinical decisions, or estimates of the cost of individual gunshot injuries.''')
-    st.markdown('### 1. Data sources and original publications')
+    st.markdown('### Data Sources')
     st.write('Find the public organizations and datasets behind the maps, community indicators, and charts.')
     sources = [
         ('Chicago Police Department / City of Chicago',
@@ -925,11 +919,11 @@ with t5:
          'Geographic reference for the 77 Chicago community areas.'),
         ('Cook County GIS', 'Cook County GIS data portal',
          'https://hub-cookcountyil.opendata.arcgis.com/',
-         'Geographic boundary information for the county outline shown on the map.')
+         'County geographic boundary reference.')
     ]
     for agency, title, url, purpose in sources:
         st.markdown(f'**{agency} — [{title}]({url})**  \n{purpose}')
-    st.markdown('### Additional official references (new)')
+    st.markdown('### References')
     purposes = {
         'cms':'Hospital-wide financial cost reports; candidate source, not confirmed CSV lineage.',
         'idph_trauma':'Official trauma designations and facility reference.',
@@ -943,15 +937,17 @@ with t5:
     for source_id, purpose in purposes.items():
         agency,title,url=SOURCE_REGISTRY[source_id]
         st.markdown(f'**{agency} — [{title}]({url})**  \n{purpose}')
-    st.markdown('### Data Sources, Definitions & Documentation')
+    st.markdown('### Definitions')
     st.caption('Use this guide to understand each indicator, its meaning and the status of its supporting documentation.')
+    st.markdown('### Publications')
     st.markdown('[Census poverty definition](https://www.census.gov/topics/income-poverty/guidance/poverty-measures.html) · [Census housing cost reference](https://www.census.gov/library/stories/2022/12/housing-costs-burden.html)')
+    st.markdown('### Indicator definitions')
     indicator_guide = {'eviction_filing_rate': ('Eviction Filing Rate',
                               'Eviction court filings relative to renter households; the rate unit is not yet '
                               'confirmed.'),
      'fatal': ('Fatal Shooting Victims', 'Recorded shooting victims who died from their injuries.'),
      'hospital_coverage': ('Illustrative Hospital Coverage Areas',
-                           'Modeled areas reachable within a selected driving time; not actual patient catchment '
+                           'Illustrative access areas; not actual patient catchment '
                            'areas.'),
      'hospital_financials': ('Hospital Financial Information',
                              'Hospital-wide costs, patient revenue and care costs; not specific to firearm '
@@ -990,26 +986,25 @@ with t5:
     audit=[]
     for field, ids in FIELD_SOURCES.items():
         entry=PROVENANCE.get(field,{}) if isinstance(PROVENANCE.get(field,{}),dict) else {}
-        audit.append({'Indicator':indicator_guide[field][0], 'What it means':indicator_guide[field][1], 'Reference providers':'; '.join(SOURCE_REGISTRY[x][0] for x in ids) or 'Not established',
+        audit.append({'Indicator':indicator_guide[field][0], 'What it means':indicator_guide[field][1], 'Source':('; '.join(SOURCE_REGISTRY[x][0] for x in ids) or 'Not established') + ('' if documented(field) else ' (candidate references)'),
                       'Reference period':entry.get('reference_period','Unknown'),
                       'Original file':entry.get('original_file','Not supplied'),
                       'Status':provenance_status(field)})
     audit_df=pd.DataFrame(audit)
-    st.dataframe(audit_df[['Indicator', 'What it means', 'Reference providers']],hide_index=True,use_container_width=True,height=420, column_config={
+    st.dataframe(audit_df[['Indicator', 'What it means', 'Source']],hide_index=True,use_container_width=True,height=420, column_config={
         'Indicator': st.column_config.TextColumn('Indicator', width='large'),
         'What it means': st.column_config.TextColumn('What it means', width='large'),
-        'Reference providers': st.column_config.TextColumn('Reference providers', width='large'),
+        'Source': st.column_config.TextColumn('Source', width='large'),
     })
     with st.expander('Read all indicator definitions', expanded=False):
         for indicator, definition in indicator_guide.values():
             st.markdown(f'**{indicator}** — {definition}')
-    st.download_button('Download data dictionary and source documentation (CSV)',audit_df.assign(**{'Technical field':list(FIELD_SOURCES)}).to_csv(index=False).encode('utf-8'),file_name='source_audit.csv',mime='text/csv')
     k1,k2,k3,k4=st.columns(4)
     k1.metric('Community areas',fmt(D.ca_num.nunique()))
     k2.metric('Years represented',f'{D.year.min()}–{D.year.max()}')
     k3.metric('Community-year rows',fmt(len(D)))
     k4.metric('Hospitals in file',fmt(len(H)))
-    st.markdown('### 2. How are the numbers calculated?')
+    st.markdown('### Methods')
     st.write('The main comparison measure is shooting victims per 10,000 residents. For example, 20 victims among 10,000 residents is a rate of 20 per 10,000.')
     with st.expander('Definitions and data preparation',expanded=False):
         st.markdown('''**Unit of analysis:** One community area in one reporting year. The app removes exact duplicate rows, excludes conflicting community-area/year keys, validates numerical ranges and recalculates victim rates. These checks do not establish source accuracy. Some socioeconomic profile fields may repeat across years rather than represent new annual measurements.
@@ -1028,14 +1023,14 @@ with t5:
 
 **What-if controls:** Sliders change model inputs and display the relative fitted rate. They **do not** estimate the effect of a real intervention. Repeated area observations, time-varying measurement and unmeasured confounders limit inference. The model has not been independently validated for forecasting or policy use.''')
     with st.expander('Hospital access and financial methodology'):
-        st.markdown('''**Access:** Existing travel times are displayed as unverified project estimates. Coverage polygons require documented routing methodology. When unavailable, community shading classifies existing estimated travel times against the selected threshold; it does not represent a driving-time catchment. They are not ambulance response times, patient transport times, or observed patient catchment areas.
+        st.markdown('''**Access:** Existing travel times are displayed as unverified project estimates. The trauma center map uses straight-line distances from community area centroids. Circles represent the selected distance radius, not driving-time catchments. They are not ambulance response times, patient transport times, or observed patient catchment areas.
 
 **Finances:** Neighborhood shooting totals are not hospital patient counts; hospital-specific firearm injury counts are not available. The existing trauma_hospitals.csv amounts are displayed without changing their values. CMS and IDPH are verification references; original source reconciliation remains pending. Hospital records show hospital-wide financial indicators. They cannot establish the cost, reimbursement, uncompensated care, or net financial loss attributable specifically to gunshot patients. Financial reporting years may differ from shooting years.''')
-    st.markdown('### 3. Understanding the findings')
+    st.markdown('### Limitations')
     st.write('These limitations matter when comparing neighborhoods or using findings to guide further research.')
     limitations = [
-        ('Recent eviction records','Community-area eviction filing records for 2020–2025 have been requested but are not available in the project inputs; historical eviction values should not be interpreted as recent annual observations.'),
-        ('Source verification','Reference providers are suggested sources; original dataset provenance and indicator definitions have not been independently verified.'),
+        ('Recent eviction records','The referenced eviction portal release covers 2010–2019. The reference period of values in the merged dataset has not been verified.'),
+        ('Source verification','The sources listed include candidate references; dataset provenance and indicator definitions have not been independently verified.'),
         ('Indicator timing','Socioeconomic estimates may cover multi-year reference periods or be repeated across reporting years.'),
         ('Geographic interpretation','Community-area averages conceal variation within areas and do not identify individual risk.'),
         ('Healthcare access','Modeled travel reach excludes observed ambulance dispatch, traffic conditions, treatment routing and patient origin.'),
@@ -1044,33 +1039,14 @@ with t5:
     ]
     for heading, explanation in limitations:
         st.markdown(f'**{heading}.** {explanation}')
-    st.markdown('### 4. Research data downloads')
-    with st.expander('Download research data (CSV)'):
-        d1,d2=st.columns(2)
-        d1.download_button('Download merged dataset',D.to_csv(index=False).encode('utf-8'),file_name='chicago_community_area_year_merged.csv',mime='text/csv',key='methods_merged')
-        d2.download_button('Download selected-year data',current.to_csv(index=False).encode('utf-8'),file_name=f'chicago_{year}.csv',mime='text/csv',key='methods_year')
-
-with st.sidebar.expander('Download dashboard report (PDF)',expanded=False):
-    st.write(f'Generate a report for **{area}**, reporting year **{year}**, trend period **{range_start}–{range_end}**. Includes a KPI summary, charts, and limitations.')
-    report_selection=(str(area),int(year),int(range_start),int(range_end))
-    if st.button('Generate PDF report',key='generate_report'):
-        try:
-            st.session_state['pdf_report_bytes']=create_client_pdf(current,D,H,year,area,range_start,range_end)
-            st.session_state['pdf_report_selection']=report_selection
-        except ImportError:
-            st.error('PDF export requires reportlab and matplotlib. Add both packages to requirements.txt.')
-        except Exception as export_error:
-            st.error(f'Could not create the PDF report for this selection: {export_error}')
-    if (st.session_state.get('pdf_report_selection') == report_selection
-            and st.session_state.get('pdf_report_bytes')):
-        st.download_button('Download dashboard report',
-            data=st.session_state['pdf_report_bytes'],
-            file_name=f'cook_county_health_{area.lower().replace(" ","_")}_{year}.pdf',
-            mime='application/pdf',key='download_pdf')
-    else:
-        st.caption('Click Generate PDF report first. Reports are rebuilt when you change the selection.')
+    st.markdown('### Notes')
+    st.markdown('''- **Shooting victims** counts people, not separate shooting incidents.
+- **Victims per 10,000** makes comparisons fairer between communities of different sizes.
+- **Estimated driving time** describes modeled access to listed hospitals, not ambulance response time.
+- **Hospital costs** describe costs across all hospital services, not the costs of treating gunshot patients.
+- **Model findings** show associations, not proof of causes.''')
 
 st.caption('Chicago community-area research dashboard · Exploratory information, not emergency-response or clinical guidance')
 
 
-st.markdown('<div class="cch-footer"><strong>Chicago Community Insights</strong> · Research project<br>Explore sources and limitations in Glossary &amp; Resources. <a href="https://cookcountyhealth.org/" target="_blank" rel="noopener noreferrer">Visit Cook County Health</a>.</div>', unsafe_allow_html=True)
+st.markdown('<div class="cch-footer"><strong>Project credits | IDS 406 · Fall 2026</strong><br>Academic project by Mohammed Ali, Abdoul Adoum, Arhaam Fazul Al Rahman and Praise Oyebanji.<br>Faculty supervisor: Professor Ranga Chandrasekaran · Teaching assistant: Vishaal Dayashanker · Project mentor: Dr. Kendra Outler.<br>Explore sources and limitations in Glossary &amp; Resources. <a href="https://cookcountyhealth.org/" target="_blank" rel="noopener noreferrer">Visit Cook County Health</a>.</div>', unsafe_allow_html=True)
