@@ -429,14 +429,7 @@ with t1:
                   f"(a decrease of {best.rate_drop:.1f} victims per 10,000 residents compared with {year-1}).") if best.rate_drop>0 else                  f'**Year-over-year comparison:** No community area shows a lower rate than {year-1} in the comparable data.'
     else:
         insight2=f'**Year-over-year comparison:** Comparable {year-1} rates are unavailable.'
-    valid_drive=current.dropna(subset=['profile_trauma_drive_min'])
-    if not valid_drive.empty:
-        longest=valid_drive.loc[valid_drive.profile_trauma_drive_min.idxmax()]
-        insight3=(f"**Longest estimated driving time to a trauma center:** {longest.ca_name} "
-                  f"({longest.profile_trauma_drive_min:.1f} minutes; excludes ambulance response time).")
-    else:
-        insight3='**Estimated driving time to a trauma center:** No data available.'
-    for insight in (insight1,insight2,insight3):
+    for insight in (insight1,insight2):
         st.markdown('- '+insight)
     left,right=st.container(),st.container()
     with left:
@@ -449,7 +442,6 @@ with t1:
         vmin=float(v.min()) if len(v) else 0; vmax=float(v.max()) if len(v) else 1
         import branca.colormap as bcm
         cmap=bcm.LinearColormap(['#fff7bc','#fec44f','#f03b20','#800026'],vmin=vmin,vmax=max(vmax,vmin+.01),caption=choice)
-        show_trauma_on_main=st.checkbox('Show listed trauma hospitals on this map',value=False,key='main_trauma_markers')
         mp=folium.Map(location=[41.84,-87.68],zoom_start=10,tiles='OpenStreetMap',control_scale=True)
         lookup=current.set_index('ca_num')
         def style(feature):
@@ -459,7 +451,7 @@ with t1:
             cid=int(feature['properties']['ca_num'])
             if cid not in lookup.index: continue
             r=lookup.loc[cid]
-            fields=[('Shooting victims',fmt(r.shot_total)),('Fatal shooting victims',fmt(r.fatal)),('Nonfatal shooting victims',fmt(r.nonfatal)),('Victims per 10,000 residents',fmt(r.shot_rate_per_10k,1)),('Poverty (%)',pct(r.pct_poverty)),('Unemployment (%)',pct(r.pct_unemployed)),('Income per person', '$'+fmt(r.per_capita_income)),('Eviction filing rate',get(r,'eviction_reference')),('Estimated driving time to a trauma center (minutes)',fmt(get(r,'profile_trauma_drive_min'),1)),('Estimated number of clinics',fmt(get(r,'profile_clinics'))),('Nearest listed trauma center',str(get(r,'profile_nearest_center')) if pd.notna(get(r,'profile_nearest_center')) else 'Data unavailable'),('Medicaid coverage (%)',pct(get(r,'pct_on_medicaid')))]
+            fields=[('Shooting victims',fmt(r.shot_total)),('Fatal shooting victims',fmt(r.fatal)),('Nonfatal shooting victims',fmt(r.nonfatal)),('Victims per 10,000 residents',fmt(r.shot_rate_per_10k,1)),('Poverty (%)',pct(r.pct_poverty)),('Unemployment (%)',pct(r.pct_unemployed)),('Income per person', '$'+fmt(r.per_capita_income)),('Eviction filing rate',get(r,'eviction_reference')),('Estimated driving time to a trauma center (minutes)',fmt(get(r,'profile_trauma_drive_min'),1)),('Estimated number of clinics',fmt(get(r,'profile_clinics'))),('Medicaid coverage (%)',pct(get(r,'pct_on_medicaid')))]
             details=''.join(f'<tr><td style="padding:3px 8px">{html.escape(k)}</td><td><b>{html.escape(str(val))}</b></td></tr>' for k,val in fields)
             popup=folium.Popup(f'<div style="font:13px Arial;width:315px"><h3>{html.escape(str(r.ca_name))} · {year}</h3><table>{details}</table><p style="font-size:11px">Some indicator definitions and reporting periods remain unverified. Estimated driving time does not measure ambulance response time.</p></div>',max_width=380)
             folium.GeoJson(feature,style_function=style,highlight_function=lambda f:{'weight':3,'color':'#111827','fillOpacity':.88},tooltip=f'{r.ca_name}: {choice} {fmt(get(r,field),1)}',popup=popup).add_to(mp)
@@ -470,22 +462,6 @@ with t1:
             popup="Cook County Health - Stroger Hospital",
             icon=folium.Icon(color="darkblue", icon="plus-sign")
         ).add_to(mp)
-        if show_trauma_on_main and {'hospital','lat','lon'}.issubset(H.columns):
-            trauma_overlay=folium.FeatureGroup(name='Listed hospitals',show=True)
-            for _, hosp in H.iterrows():
-                lat=pd.to_numeric(hosp.get('lat'),errors='coerce')
-                lon=pd.to_numeric(hosp.get('lon'),errors='coerce')
-                if pd.isna(lat) or pd.isna(lon):
-                    continue
-                name=str(hosp.get('hospital','Listed hospital'))
-                is_stroger=('stroger' in name.lower() or 'cook county hospital' in name.lower())
-                folium.CircleMarker(
-                    location=[float(lat),float(lon)],radius=7 if is_stroger else 5,
-                    color=NAVY if is_stroger else TEAL,fill=True,fill_opacity=.95,
-                    tooltip=name,
-                    popup=folium.Popup(html.escape(name)+'<br>Location from hospital dataset',max_width=280)
-                ).add_to(trauma_overlay)
-            trauma_overlay.add_to(mp)
         # Custom vertical map legend, positioned INSIDE the map on its right edge.
         # Do not add cmap to the map: its default horizontal legend sits on top.
         def legend_number(x):
@@ -565,36 +541,34 @@ with t2:
     factor_explanations = {
         'Poverty (%)': (
             'Percentage of people living below the poverty threshold.',
-            '(People below the poverty threshold ÷ people covered by the poverty measure) × 100.'
+            'Out of every 100 people covered by the measure, how many live below the poverty threshold?'
         ),
         'Unemployment (%)': (
             'Percentage of the labor force that is unemployed and looking for work.',
-            '(Unemployed people ÷ total labor force) × 100.'
+            'Out of every 100 people in the labor force, how many are unemployed?'
         ),
         'Income per person ($)': (
             'Average income per person, not per household.',
-            'Total income of residents ÷ total population.'
+            'Total resident income shared equally across the population.'
         ),
         'Rent burden (%)': (
             'Percentage of renter households spending at least 30% of income on housing under the standard definition.',
-            '(Rent-burdened renter households ÷ renter households assessed) × 100.'
+            'Out of every 100 renter households assessed, how many spend at least 30% of income on housing?'
         ),
         'Eviction filing rate': (
             'How frequently eviction cases are filed against renter households.',
-            'Eviction filings ÷ renter households; the dataset source determines whether the result is per 100, per 1,000, or another unit.'
+            'Compare the number of eviction filings with the number of renter households. The reporting unit depends on the source.'
         ),
     }
-    meaning, calculation = factor_explanations[factor]
-    st.info(f'**{factor} — Meaning:** {meaning}  \n**How it is calculated:** {calculation}')
-    st.caption('These are standard definitions. The exact definitions and reporting periods of some dataset indicators remain unverified.')
     with st.expander('See definitions and calculations for all five factors'):
         for factor_name, (short_meaning, short_formula) in factor_explanations.items():
             st.markdown(f'**{factor_name}:** {short_meaning}  \n*Calculation:* {short_formula}')
+    st.caption("These are standard definitions; some dataset definitions and reporting periods remain unverified.")
     valid=current.dropna(subset=[col,'shot_rate_per_10k'])
     fig=px.scatter(valid,x=col,y='shot_rate_per_10k',size='shot_total',hover_name='ca_name',color='shot_rate_per_10k',color_continuous_scale=[(0,'#DDF2F6'),(.5,TEAL),(1,RED)],labels={col:factor,'shot_rate_per_10k':'Shooting victims per 10,000 residents'},height=410)
     st.plotly_chart(fig,use_container_width=True)
     st.caption('Each point represents a community area. An association does not establish causation.')
-    st.subheader('Statistical model (Poisson regression)')
+    st.subheader('Statistical Model')
     st.write('This analysis looks for patterns between poverty, unemployment, and shooting victim rates across Chicago. It accounts for differences in community population and reporting year. A relationship in the data does **not** mean one condition causes shootings.')
     predictors = ['pct_poverty', 'pct_unemployed']
     model_data = D[['ca_name', 'year', 'shot_total', 'population'] + predictors].dropna().copy()
@@ -621,7 +595,7 @@ with t2:
                 results.append({'Factor': label,
                     'Estimated rate difference per percentage-point increase': f'{abs(change):.1f}% {direction}'})
             st.dataframe(pd.DataFrame(results), hide_index=True, use_container_width=True)
-            st.caption('These are model-based associations, not predictions or evidence that changing poverty or unemployment will change shootings. Other important factors may be missing.')
+            st.caption('These are model-based associations, not predictions or evidence that changing poverty or unemployment will change shootings.')
             st.subheader('How closely does the model match recorded shootings?')
             st.write('Each dot represents a Chicago community area. The horizontal axis shows the number of shooting victims estimated by the model, and the vertical axis shows the actual recorded number. Dots closer to the dashed line indicate a closer match.')
             # In-sample fitted values for the selected reporting year, not future predictions.
@@ -674,30 +648,8 @@ with t2:
             st.info(f'The statistical analysis is unavailable for the current dataset.')
 
 with t3:
-    st.subheader('Trauma center access')
-    st.write('Explore trauma center locations and straight-line distances from Chicago community areas.')
-    if row is not None:
-        a,b,c=st.columns(3)
-        a.metric('Nearest listed center',str(get(row,'profile_nearest_center')) if pd.notna(get(row,'profile_nearest_center')) else 'Data unavailable')
-        b.metric('Estimated driving time to a trauma center (minutes)',fmt(get(row,'profile_trauma_drive_min'),1))
-        c.metric('Estimated number of clinics',fmt(get(row,'profile_clinics')))
+    st.subheader('Trauma Center Access')
     render_trauma_options(current, G, H, row, year)
-    st.divider()
-    st.subheader("Cook County Health | John H. Stroger Jr. Hospital")
-    st.caption("Featured hospital · Chicago, Illinois")
-    k1, k2, k3 = st.columns(3)
-    k1.metric("Trauma designation", "Adult Level I")
-    k2.metric("Healthcare system", "Cook County Health")
-    k3.metric("Location", "Chicago, IL")
-    st.markdown(
-        "**John H. Stroger Jr. Hospital of Cook County** is a public teaching "
-        "hospital providing emergency and trauma services. "
-        "**Address:** 1969 W. Ogden Avenue, Chicago, IL 60612. "
-        "[Official Stroger Hospital page](https://cookcountyhealth.org/locations/john-h-stroger-jr-hospital-of-cook-county/)"
-    )
-    st.subheader('Community area trauma care indicators')
-    with st.expander('Explore community area trauma care indicators'):
-        st.dataframe(current[['ca_name','shot_rate_per_10k','profile_nearest_center','profile_trauma_drive_min','profile_clinics']].sort_values('shot_rate_per_10k',ascending=False).rename(columns={'ca_name':'Community area','shot_rate_per_10k':'Victims per 10,000 residents','profile_nearest_center':'Nearest listed center','profile_trauma_drive_min':'Estimated drive (minutes)','profile_clinics':'Estimated clinics'}),hide_index=True,use_container_width=True)
 
 with t4:
     st.subheader('Community area comparison')
@@ -777,7 +729,7 @@ with t4:
 
 with t6:
     st.subheader("Economic impact: hospital costs")
-    st.warning("These figures describe hospital-wide financial activity, not the cost of treating firearm injuries. The original financial sources and reporting periods have not been fully verified.")
+    st.write("These figures describe hospital-wide financial activity, not the cost of treating firearm injuries. The original financial sources and reporting periods have not been fully verified.")
     finance_labels = {
         'hospital': 'Hospital', 'type': 'Hospital type',
         'fiscal_year_end': 'Fiscal year end',
@@ -818,7 +770,6 @@ with t6:
         st.plotly_chart(chart_style(fig), use_container_width=True)
     else:
         st.info('No numerical values are available for this financial measure.')
-    st.caption('Financial figures cover all hospital services, not only firearm injuries.')
     st.markdown('[CMS Hospital Provider Cost Report — data source reference](https://data.cms.gov/provider-compliance/cost-reports/hospital-provider-cost-report)')
 
 
@@ -898,7 +849,7 @@ def create_client_pdf(data, all_history, hospitals, reporting_year, community, s
 st.divider()
 with t5:
     st.markdown('### Data Sources')
-    st.caption('Public datasets and geographic resources relevant to this dashboard. The exact source of each merged indicator is listed under Definitions when documented.')
+    st.caption('Public datasets and geographic resources relevant to this dashboard. Source links are provided for reference; not all merged indicators have confirmed provenance.')
     for source_id in ('cpd','evictions','atlas','acs','community_acs','boundaries','county_gis','cms','cdph_clinics'):
         agency, title, url = SOURCE_REGISTRY[source_id]
         st.markdown(f'**{agency}** — [{title}]({url})')
@@ -929,15 +880,10 @@ with t5:
         'profile_trauma_drive_min': ('Estimated Driving Time', 'Estimated driving time to a listed trauma center, in minutes.'),
         'hospital_coverage': ('Illustrative Hospital Coverage Areas', 'Illustrative geographic areas used to describe access to hospitals.'),
     }
-    definitions = []
-    for field, (indicator, definition) in indicator_guide.items():
-        ids = PROVENANCE[field]['source_ids'] if documented(field) else []
-        source = '; '.join(dict.fromkeys(SOURCE_REGISTRY[x][0] for x in ids)) if ids else 'Not confirmed'
-        definitions.append({'Indicator': indicator, 'Definition': definition, 'Source': source})
+    definitions = [{'Indicator': indicator, 'Definition': definition} for indicator, definition in indicator_guide.values()]
     st.dataframe(pd.DataFrame(definitions), hide_index=True, use_container_width=True, height=650,
                  column_config={'Indicator': st.column_config.TextColumn('Indicator', width='medium'),
-                                'Definition': st.column_config.TextColumn('Definition', width='large'),
-                                'Source': st.column_config.TextColumn('Source', width='medium')})
+                                'Definition': st.column_config.TextColumn('Definition', width='large')})
     st.markdown('### Methods')
     st.markdown('''- **Data preparation:** Records are organized by community area and reporting year. Duplicate records, conflicting entries and invalid numerical values are screened before analysis.
 - **Statistical analysis:** The Poisson model examines associations between shooting victim counts, poverty and unemployment while accounting for population and reporting year.
@@ -958,4 +904,4 @@ with t5:
 st.caption('Chicago community area research dashboard. For research purposes only; not intended for emergency response or clinical guidance.')
 
 
-st.markdown('<div class="cch-footer"><strong>Project credits | IDS 406 · Fall 2026</strong><br>Academic project by Mohammed Ali, Abdoul Adoum, Arhaam Fazul Al Rahman and Praise Oyebanji.<br>Faculty supervisor: Professor Ranga Chandrasekaran · Teaching assistant: Vishaal Dayashanker · Project mentor: Dr. Kendra Outler.<br>Explore sources and limitations in Glossary &amp; Resources. <a href="https://cookcountyhealth.org/" target="_blank" rel="noopener noreferrer">Visit Cook County Health</a>.</div>', unsafe_allow_html=True)
+st.markdown('<div class="cch-footer"><strong>Project credits | IDS 406 · Fall 2026</strong><br>Academic project by Mohammed Ali, Abdoul Adoum, Arhaam Fazul Al Rahman and Praise Oyebanji.<br>Project mentor: Dr. Kendra Outler · Faculty supervisor: Professor Ranga Chandrasekaran · Teaching assistant: Vishaal Dayashanker.<br>Explore sources and limitations in Glossary &amp; Resources. <a href="https://cookcountyhealth.org/" target="_blank" rel="noopener noreferrer">Visit Cook County Health</a>.</div>', unsafe_allow_html=True)
