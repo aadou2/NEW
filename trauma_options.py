@@ -144,7 +144,7 @@ def render_trauma_options(current, geo, hospitals, focus_row, year):
         st.info('No adult Level I trauma centers with locations are available in the hospital file.')
         return
 
-    threshold = st.slider('Distance threshold (miles)', 2.0, 10.0, 5.0, 0.5, key='options_miles',
+    threshold = st.slider('Distance radius (miles)', 2.0, 10.0, 5.0, 0.5, key='options_miles',
                           help='5 miles is the distance used in the Chicago "trauma deserts" study '
                                '(Crandall et al., American Journal of Public Health, 2013).')
 
@@ -195,7 +195,7 @@ def render_trauma_options(current, geo, hospitals, focus_row, year):
         tip = (f"<b>{html.escape(str(r.ca_name))}</b><br>"
                f"{int(r.options)} Level I center(s) within {threshold:g} mi: {html.escape(r.within_list)}<br>"
                f"Nearest: {html.escape(r.nearest_three)}<br>"
-               f"People shot ({year}): {fmt(r.shot_total)}")
+               f"Shooting victims ({year}): {fmt(r.shot_total)}")
         folium.GeoJson(feature,
             style_function=lambda f, c=color_for(r.options), w=3 if is_focus else .7: {
                 'fillColor': c, 'color': '#202c3b' if w > 1 else '#657181', 'weight': w, 'fillOpacity': .62},
@@ -233,18 +233,16 @@ def render_trauma_options(current, geo, hospitals, focus_row, year):
     st_folium(omap, height=520, use_container_width=True, returned_objects=[],
               key=f'options_map_{year}_{threshold}_{focus_row.ca_num if focus_row is not None else "all"}')
     st.caption('Distances are straight-line miles from the center of each community area to each adult Level I '
-               'trauma center (Rush is excluded; it is not Level I). Circles show the chosen distance around each '
+               'trauma center (Rush is excluded; it is not Level I). Solid and dashed circles show the selected straight-line radius around each '
                'center. Pick a community in the sidebar to draw lines to its three nearest centers. The map shows '
                'the options; it does not show which hospital patients were actually taken to. Click a hospital marker for details and its official website.')
 
     # Table: the comparison behind the map.
     table = summary.sort_values(['options', 'shot_total'], ascending=[True, False])[
         ['ca_name', 'shot_total', 'options', 'nearest_three', 'stroger_miles', 'stroger_option']].rename(columns={
-        'ca_name': 'Community area', 'shot_total': f'People shot ({year})', 'options': f'Centers within {threshold:g} mi',
+        'ca_name': 'Community area', 'shot_total': f'Shooting victims ({year})', 'options': f'Centers within {threshold:g} mi',
         'nearest_three': 'Nearest three centers', 'stroger_miles': 'Miles to Stroger', 'stroger_option': 'Stroger within reach'})
     table['Stroger within reach'] = table['Stroger within reach'].map({True: 'Yes', False: 'No'})
     with st.expander('See every community’s trauma center options'):
-        st.dataframe(table.style.format({f'People shot ({year})': '{:,.0f}', 'Miles to Stroger': '{:.1f}'}, na_rep='N/A'),
+        st.dataframe(table.style.format({f'Shooting victims ({year})': '{:,.0f}', 'Miles to Stroger': '{:.1f}'}, na_rep='N/A'),
                      hide_index=True, use_container_width=True)
-        st.download_button('Download trauma options (CSV)', table.to_csv(index=False).encode('utf-8'),
-                           file_name=f'trauma_options_{year}_{threshold:g}mi.csv', mime='text/csv', key='download_options')
