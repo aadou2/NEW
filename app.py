@@ -10,6 +10,7 @@ import folium
 from streamlit_folium import st_folium
 import statsmodels.api as sm
 from io import BytesIO
+from trauma_options import render_trauma_options
 
 NAVY = '#06264A'
 TEAL = '#079DB5'
@@ -311,6 +312,12 @@ h1,h2,h3 { letter-spacing:-.025em; }
 .cch-footer a { color:inherit; text-decoration:underline; }
 @media(max-width:700px) { .cch-hero { padding:22px 18px; } .cch-hero:after { opacity:.4; } }
 
+
+/* Keep metric cards readable and allow long values to wrap in narrow columns. */
+[data-testid="stMetric"] { background:var(--secondary-background-color, #F0F4F8)!important; color:var(--text-color, #06264A)!important; min-width:0; height:auto; }
+[data-testid="stMetricLabel"], [data-testid="stMetricValue"], [data-testid="stMetricLabel"] *, [data-testid="stMetricValue"] * { color:var(--text-color, #06264A)!important; -webkit-text-fill-color:var(--text-color, #06264A)!important; white-space:normal!important; overflow-wrap:anywhere; text-overflow:clip!important; overflow:visible!important; }
+[data-testid="stMetricValue"] { font-size:clamp(1.15rem, 2vw, 1.85rem)!important; line-height:1.25; }
+[data-testid="stPlotlyChart"] { overflow:visible!important; }
 </style>""",unsafe_allow_html=True)
 
 def chart_style(fig, height=None):
@@ -671,6 +678,7 @@ with t2:
         except Exception as exc:
             st.info(f'The analysis is unavailable: {exc}')
 
+
 with t3:
     st.subheader('Healthcare access and hospital impact')
     st.write('Explore where listed hospitals are located, estimated driving-time coverage, and hospital-wide financial information.')
@@ -886,6 +894,9 @@ with t3:
     )
     st.caption("Navy: Stroger Hospital · Turquoise-blue: other locally listed hospitals, if available. "
                "Map coordinates are approximate; confirm locations and trauma designations before publication.")
+
+    st.divider()
+    render_trauma_options(current, G, H, row, year)
 
     st.divider()
     st.subheader("Cook County Health | John H. Stroger Jr. Hospital")
