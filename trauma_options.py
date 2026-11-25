@@ -135,10 +135,7 @@ def hospital_details(name, hospitals):
 
 
 def render_trauma_options(current, geo, hospitals, focus_row, year):
-    st.markdown('#### Trauma center options by community')
-    st.write('For each community area: how far it is from every adult Level I trauma center, and how many '
-             'centers are within the distance you choose. Where several centers are close, the question becomes '
-             'which one patients are taken to, and why.')
+    st.write('Compare distances from Chicago community areas to adult Level I trauma centers. Select a distance radius to see nearby centers.')
     dist, centers = community_center_distances(geo, hospitals)
     if dist.empty:
         st.info('No adult Level I trauma centers with locations are available in the hospital file.')
@@ -165,11 +162,8 @@ def render_trauma_options(current, geo, hospitals, focus_row, year):
             'stroger_option': (not stroger.empty) and stroger.miles.iloc[0] <= threshold,
         })
     summary = pd.DataFrame(summary).merge(
-        current[['ca_num', 'ca_name', 'shot_total', 'population']], on='ca_num', how='left')
+        current[['ca_num', 'ca_name', 'profile_clinics']], on='ca_num', how='left')
 
-    # Headline numbers: people first.
-    def shot_in(mask):
-        return int(summary.loc[mask, 'shot_total'].fillna(0).sum())
     desert = summary.options.eq(0)
     multi = summary.options.ge(2)
     stroger_shared = summary.stroger_option & multi
@@ -178,7 +172,6 @@ def render_trauma_options(current, geo, hospitals, focus_row, year):
                              (m2, 'Two or more centers within reach', multi),
                              (m3, 'Stroger is one of several options', stroger_shared)]:
         col.metric(label, f'{int(mask.sum())} areas')
-        col.caption(f'{shot_in(mask):,} shooting victims recorded in these areas in {year}')
 
     # Map: shade by number of options; lines from the focus area to its nearest centers.
     option_colors = {0: '#C84459', 1: '#F2C46D', 2: '#7FC8D2', 3: '#079DB5'}
@@ -194,8 +187,7 @@ def render_trauma_options(current, geo, hospitals, focus_row, year):
         is_focus = focus_row is not None and int(focus_row.ca_num) == cid
         tip = (f"<b>{html.escape(str(r.ca_name))}</b><br>"
                f"{int(r.options)} Level I center(s) within {threshold:g} mi: {html.escape(r.within_list)}<br>"
-               f"Nearest: {html.escape(r.nearest_three)}<br>"
-               f"Shooting victims ({year}): {fmt(r.shot_total)}")
+               f"Nearest: {html.escape(r.nearest_three)}")
         folium.GeoJson(feature,
             style_function=lambda f, c=color_for(r.options), w=3 if is_focus else .7: {
                 'fillColor': c, 'color': '#202c3b' if w > 1 else '#657181', 'weight': w, 'fillOpacity': .62},
@@ -232,17 +224,15 @@ def render_trauma_options(current, geo, hospitals, focus_row, year):
         '<div style="margin-top:4px">Filled navy dot: Stroger</div></div>'))
     st_folium(omap, height=520, use_container_width=True, returned_objects=[],
               key=f'options_map_{year}_{threshold}_{focus_row.ca_num if focus_row is not None else "all"}')
-    st.caption('Distances are straight-line miles from the center of each community area to each adult Level I '
-               'trauma center (Rush is excluded; it is not Level I). Solid and dashed circles show the selected straight-line radius around each '
-               'center. Pick a community in the sidebar to draw lines to its three nearest centers. The map shows '
-               'the options; it does not show which hospital patients were actually taken to. Click a hospital marker for details and its official website.')
+    st.caption('Distances are measured in straight-line miles, not driving distance. Circles show the selected radius around each center. Select a community area to see lines to its three nearest centers. Dashed lines extend beyond the selected radius. Click a hospital marker for details. Patient destinations are not available.')
 
     # Table: the comparison behind the map.
-    table = summary.sort_values(['options', 'shot_total'], ascending=[True, False])[
-        ['ca_name', 'shot_total', 'options', 'nearest_three', 'stroger_miles', 'stroger_option']].rename(columns={
-        'ca_name': 'Community area', 'shot_total': f'Shooting victims ({year})', 'options': f'Centers within {threshold:g} mi',
-        'nearest_three': 'Nearest three centers', 'stroger_miles': 'Miles to Stroger', 'stroger_option': 'Stroger within reach'})
+    table = summary.sort_values(['options', 'ca_name'])[
+        ['ca_name', 'options', 'nearest_three', 'stroger_miles', 'stroger_option', 'profile_clinics']].rename(columns={
+        'ca_name': 'Community area', 'options': f'Centers within {threshold:g} mi',
+        'nearest_three': 'Nearest three centers', 'stroger_miles': 'Miles to Stroger',
+        'stroger_option': 'Stroger within reach', 'profile_clinics': 'Estimated clinics'})
     table['Stroger within reach'] = table['Stroger within reach'].map({True: 'Yes', False: 'No'})
-    with st.expander('See every community’s trauma center options'):
-        st.dataframe(table.style.format({f'Shooting victims ({year})': '{:,.0f}', 'Miles to Stroger': '{:.1f}'}, na_rep='N/A'),
+    with st.expander('Compare trauma center access by community area'):
+        st.dataframe(table.style.format({'Miles to Stroger': '{:.1f}', 'Estimated clinics': '{:,.0f}'}, na_rep='N/A'),
                      hide_index=True, use_container_width=True)
