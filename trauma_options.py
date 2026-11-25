@@ -102,6 +102,38 @@ def community_center_distances(geo, hospitals):
     return pd.DataFrame(rows), centers
 
 
+def hospital_details(name, hospitals):
+    matches = hospitals[hospitals['hospital'].astype(str).eq(name)]
+    hospital = matches.iloc[0] if not matches.empty else pd.Series(dtype=object)
+    profiles = [
+        ('loyola', 'Loyola Medicine', '2160 S. First Avenue, Maywood, IL 60153', 'https://www.loyolamedicine.org/'),
+        ('mount sinai', 'Sinai Chicago', '1500 S. Fairfield Avenue, Chicago, IL 60608', 'https://www.sinaichicago.org/'),
+        ('northwestern', 'Northwestern Medicine', '251 E. Huron Street, Chicago, IL 60611', 'https://www.nm.org/'),
+        ('rush', 'Rush University System for Health', '1653 W. Congress Parkway, Chicago, IL 60612', 'https://www.rush.edu/'),
+        ('lutheran general', 'Advocate Health Care', '1775 Dempster Street, Park Ridge, IL 60068', 'https://www.advocatehealth.com/'),
+        ('illinois masonic', 'Advocate Health Care', '836 W. Wellington Avenue, Chicago, IL 60657', 'https://www.advocatehealth.com/'),
+        ('uchicago', 'UChicago Medicine', '5841 S. Maryland Avenue, Chicago, IL 60637', 'https://www.uchicagomedicine.org/'),
+        ('university of chicago', 'UChicago Medicine', '5841 S. Maryland Avenue, Chicago, IL 60637', 'https://www.uchicagomedicine.org/'),
+        ('advocate christ', 'Advocate Health Care', '4440 W. 95th Street, Oak Lawn, IL 60453', 'https://www.advocatehealth.com/'),
+    ]
+    profiles.insert(0, ('stroger', 'Cook County Health', '1969 W. Ogden Avenue, Chicago, IL 60612', 'https://cookcountyhealth.org/locations/john-h-stroger-jr-hospital-of-cook-county/'))
+    system, address, website = next(((sys, addr, url) for alias, sys, addr, url in profiles if alias in name.lower()), ('Listed hospital', '', ''))
+    def value(*keys):
+        for key in keys:
+            v = hospital.get(key)
+            if pd.notna(v) and str(v).strip():
+                return str(v).strip()
+        return ''
+    address = value('address', 'street_address') or address or 'Address not available'
+    kind = value('type') or ('Public teaching hospital · Emergency and trauma care' if 'stroger' in name.lower() else 'Hospital type not specified')
+    link = f'<br><a href="{html.escape(website, quote=True)}" target="_blank" rel="noopener noreferrer">Official healthcare system website</a>' if website else ''
+    details = (f'<b>{html.escape(system)}</b><br>{html.escape(name)}<br>'
+               f'<b>Adult Level I Trauma Center (dataset)</b><br>{html.escape(address)}<br>{html.escape(kind)}')
+    tooltip = '<div style="font:13px Arial;color:#06264A;line-height:1.5">' + details + '</div>'
+    popup = '<div style="font:14px Arial;color:#06264A;line-height:1.6;min-width:260px">' + details + link + '<br><small>Campus details and designation require confirmation before publication.</small></div>'
+    return tooltip, popup
+
+
 def render_trauma_options(current, geo, hospitals, focus_row, year):
     st.markdown('#### Trauma center options by community')
     st.write('For each community area: how far it is from every adult Level I trauma center, and how many '
@@ -146,7 +178,7 @@ def render_trauma_options(current, geo, hospitals, focus_row, year):
                              (m2, 'Two or more centers within reach', multi),
                              (m3, 'Stroger is one of several options', stroger_shared)]:
         col.metric(label, f'{int(mask.sum())} areas')
-        col.caption(f'{shot_in(mask):,} people shot in {year} live in these areas')
+        col.caption(f'{shot_in(mask):,} shooting victims recorded in these areas in {year}')
 
     # Map: shade by number of options; lines from the focus area to its nearest centers.
     option_colors = {0: '#C84459', 1: '#F2C46D', 2: '#7FC8D2', 3: '#079DB5'}
@@ -170,9 +202,11 @@ def render_trauma_options(current, geo, hospitals, focus_row, year):
             highlight_function=lambda f: {'weight': 3, 'color': '#111827', 'fillOpacity': .8},
             tooltip=folium.Tooltip(tip)).add_to(omap)
     for c in centers.itertuples():
+        tooltip, popup = hospital_details(c.full_name, hospitals)
         folium.CircleMarker([c.lat, c.lon], radius=8 if c.is_stroger else 6,
             color='#06264A', weight=2, fill=True, fill_color='#06264A' if c.is_stroger else '#FFFFFF',
-            fill_opacity=1, tooltip=html.escape(c.full_name)).add_to(omap)
+            fill_opacity=1, tooltip=folium.Tooltip(tooltip, sticky=True),
+            popup=folium.Popup(popup, max_width=380)).add_to(omap)
         folium.Circle([c.lat, c.lon], radius=threshold * 1609.34, color='#06264A' if c.is_stroger else '#457B9D',
             weight=1.5 if c.is_stroger else 1, fill=False, dash_array=None if c.is_stroger else '4,6').add_to(omap)
     if focus_row is not None and int(focus_row.ca_num) in lookup.index:
@@ -201,7 +235,7 @@ def render_trauma_options(current, geo, hospitals, focus_row, year):
     st.caption('Distances are straight-line miles from the center of each community area to each adult Level I '
                'trauma center (Rush is excluded; it is not Level I). Circles show the chosen distance around each '
                'center. Pick a community in the sidebar to draw lines to its three nearest centers. The map shows '
-               'the options; it does not show which hospital patients were actually taken to.')
+               'the options; it does not show which hospital patients were actually taken to. Hover over a hospital marker for details or click for its website.')
 
     # Table: the comparison behind the map.
     table = summary.sort_values(['options', 'shot_total'], ascending=[True, False])[
