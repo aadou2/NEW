@@ -202,10 +202,10 @@ def render_trauma_options(current, geo, hospitals, focus_row, year):
             highlight_function=lambda f: {'weight': 3, 'color': '#111827', 'fillOpacity': .8},
             tooltip=folium.Tooltip(tip)).add_to(omap)
     for c in centers.itertuples():
-        tooltip, popup = hospital_details(c.full_name, hospitals)
+        _, popup = hospital_details(c.full_name, hospitals)
         folium.CircleMarker([c.lat, c.lon], radius=8 if c.is_stroger else 6,
             color='#06264A', weight=2, fill=True, fill_color='#06264A' if c.is_stroger else '#FFFFFF',
-            fill_opacity=1, tooltip=folium.Tooltip(tooltip, sticky=True),
+            fill_opacity=1,
             popup=folium.Popup(popup, max_width=380)).add_to(omap)
         folium.Circle([c.lat, c.lon], radius=threshold * 1609.34, color='#06264A' if c.is_stroger else '#457B9D',
             weight=1.5 if c.is_stroger else 1, fill=False, dash_array=None if c.is_stroger else '4,6').add_to(omap)
@@ -235,7 +235,7 @@ def render_trauma_options(current, geo, hospitals, focus_row, year):
     st.caption('Distances are straight-line miles from the center of each community area to each adult Level I '
                'trauma center (Rush is excluded; it is not Level I). Circles show the chosen distance around each '
                'center. Pick a community in the sidebar to draw lines to its three nearest centers. The map shows '
-               'the options; it does not show which hospital patients were actually taken to. Hover over a hospital marker for details or click for its website.')
+               'the options; it does not show which hospital patients were actually taken to. Click a hospital marker for details and its official website.')
 
     # Table: the comparison behind the map.
     table = summary.sort_values(['options', 'shot_total'], ascending=[True, False])[
