@@ -286,25 +286,32 @@ h1,h2,h3 { letter-spacing:-.025em; }
 .cch-brand-wrap img { display:block; width:100%; max-width:240px; margin:0 auto; height:auto; object-fit:contain; border-radius:6px; padding:0; filter:none; }
 .cch-brand-wrap .brand-note { font-size:13px; line-height:1.5; }
 [data-testid="stMetric"] { border:1px solid rgba(7,157,181,.35); border-top:3px solid #079DB5; border-left:1px solid rgba(7,157,181,.35); border-radius:9px; padding:16px; box-shadow:0 2px 8px rgba(6,38,74,.06); }
-/* Spacious navigation, including Streamlit versions using BaseWeb wrappers. */
+/* Show all navigation tabs */
 [data-testid="stTabs"] [role="tablist"],
 [data-testid="stTabs"] [data-baseweb="tab-list"] {
- display:flex!important; align-items:center!important; gap:10px!important;
- padding:10px!important; border-radius:12px!important; overflow-x:auto!important;
+ display:flex!important;
+ flex-wrap:wrap!important;
+ align-items:center!important;
+ gap:8px!important;
+ padding:10px!important;
+ border-radius:12px!important;
+ overflow:visible!important;
 }
+
 [data-testid="stTabs"] [role="tab"],
 [data-testid="stTabs"] [data-baseweb="tab"] {
- flex:0 0 auto!important; margin:0 4px 0 0!important; padding:12px 17px!important;
- min-height:48px!important; border-radius:9px!important;
- border:1px solid #47708E!important; font-size:.92rem!important; white-space:nowrap!important;
- background:#123C64!important; color:#fff!important;
+ flex:1 1 30%!important;
+ margin:0!important;
+ padding:10px 12px!important;
+ min-height:48px!important;
+ border-radius:9px!important;
+ border:1px solid #47708E!important;
+ font-size:.85rem!important;
+ white-space:normal!important;
+ justify-content:center!important;
+ background:#123C64!important;
+ color:#fff!important;
 }
-[data-testid="stTabs"] [role="tab"][aria-selected="true"] {
- background:#087F93!important; border-color:#78DCE5!important;
-}
-[data-testid="stTabs"] [role="tab"] p { font-size:.92rem!important; white-space:nowrap!important; margin:0!important; }
-[data-testid="stTabs"] [role="tab"]:hover { background:#176486!important; }
-[data-testid="stTabs"] [role="tab"]:focus-visible { outline:2px solid #79EAF2!important; outline-offset:1px!important; }
 
 [data-testid="stDataFrame"] { border-radius:8px; }
 [data-testid="stPlotlyChart"] { border:1px solid rgba(128,128,128,.18); border-radius:10px; padding:6px; }
